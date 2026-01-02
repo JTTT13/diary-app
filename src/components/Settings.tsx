@@ -1,4 +1,6 @@
 import { DataManagement } from './DataManagement';
+import { useState, useEffect } from 'react';
+import { dbService } from '../lib/db';
 
 interface SettingsProps {
   theme: 'light' | 'dark';
@@ -7,6 +9,23 @@ interface SettingsProps {
 }
 
 export function Settings({ theme, onToggleTheme, onBack }: SettingsProps) {
+  const [showTitle, setShowTitle] = useState(true);
+
+  useEffect(() => {
+    loadTitleSetting();
+  }, []);
+
+  const loadTitleSetting = async () => {
+    const setting = await dbService.getShowTitle();
+    setShowTitle(setting);
+  };
+
+  const handleToggleTitle = async () => {
+    const newValue = !showTitle;
+    setShowTitle(newValue);
+    await dbService.setShowTitle(newValue);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-6">
       <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -58,6 +77,34 @@ export function Settings({ theme, onToggleTheme, onBack }: SettingsProps) {
                   </svg>
                 )}
               </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 標題設定 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            標題欄位
+          </h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white">標題欄位</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">編輯器顯示標題輸入框</div>
+            </div>
+            <button
+              onClick={handleToggleTitle}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                showTitle ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform ${
+                  showTitle ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         </div>

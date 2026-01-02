@@ -16,9 +16,19 @@ export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
   const [wordCount, setWordCount] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [createdTime, setCreatedTime] = useState<Date>(new Date());
+  const [showTitle, setShowTitle] = useState(true);
   const saveTimeoutRef = useRef<number | null>(null);
   const currentDiaryIdRef = useRef<string | null>(null);
   const initialLoadRef = useRef(true);
+
+  useEffect(() => {
+    loadTitleSetting();
+  }, []);
+
+  const loadTitleSetting = async () => {
+    const setting = await dbService.getShowTitle();
+    setShowTitle(setting);
+  };
 
   useEffect(() => {
     if (diary) {
@@ -103,20 +113,16 @@ export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
         const existingDiary = diary;
         const changes: string[] = [];
         if (existingDiary) {
-          if (existingDiary.title !== title.trim()) {
-            changes.push(`📝 標題：「${existingDiary.title}」→「${title.trim()}」`);
-          }
           if (existingDiary.content !== contentToSave) {
             const oldLength = existingDiary.content.length;
             const newLength = contentToSave.length;
             const diff = newLength - oldLength;
             if (diff > 0) {
-              changes.push(`➕ ${diff} 個字符`);
+              changes.push(`新增 ${diff} 字`);
             } else if (diff < 0) {
-              changes.push(`➖ ${Math.abs(diff)} 個字符`);
-            } else {
-              changes.push(`✏️內容已修改（字數不變）`);
+              changes.push(`刪除 ${Math.abs(diff)} 字`);
             }
+            // 不記錄無字數變化的編輯
           }
         }
 
@@ -125,13 +131,13 @@ export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
           content: contentToSave,
           updatedAt: now,
           isEdited: true,
-          editHistory: [
+          editHistory: changes.length > 0 ? [
             ...(existingDiary?.editHistory || []),
             {
               timestamp: now,
-              changes: changes.length > 0 ? changes.join('；') : '內容已更新'
+              changes: changes.join('、')
             }
-          ]
+          ] : existingDiary?.editHistory || []
         });
       } else {
         // 創建新日記
@@ -267,18 +273,14 @@ export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
           <div className="max-h-48 overflow-y-auto rounded-lg bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700">
             <div className="space-y-3">
               {diary.editHistory.map((record, index) => (
-                <div key={index} className="flex gap-3 pb-3 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
-                  <div className="flex-shrink-0 mt-1">
-                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                  </div>
-                  <div className="flex-1 min-w-0">
+                <div key={index} className="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
+                  <div className="min-w-0">
                     <div className="text-xs font-medium text-gray-500 dark:text-gray-500 mb-0.5">
                       {formatDateTime(record.timestamp)}
                     </div>
                     <div className="space-y-1">
                       {record.changes.split('\n').map((change, idx) => (
-                        <div key={idx} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
-                          <span className="flex-shrink-0 mt-0.5">{change.includes('➕') ? '🟢' : change.includes('➖') ? '🔴' : '🔵'}</span>
+                        <div key={idx} className="text-xs text-gray-600 dark:text-gray-400">
                           <span className="break-words">{change}</span>
                         </div>
                       ))}
@@ -294,13 +296,15 @@ export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
       {/* 編輯區域 */}
       <div className="flex-1 min-h-0 flex flex-col gap-4 p-6 overflow-hidden">
         {/* 標題輸入 */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="請輸入標題..."
-          className="flex-shrink-0 w-full text-2xl font-bold bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-        />
+        {showTitle && (
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="請輸入標題..."
+            className="flex-shrink-0 w-full text-2xl font-bold bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          />
+        )}
 
         {/* 內容輸入 */}
         <textarea

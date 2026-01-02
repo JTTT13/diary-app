@@ -274,6 +274,19 @@ export class DiaryDBService {
     }
   }
 
+  async setShowTitle(show: boolean): Promise<void> {
+    const settings = await this.getSettings();
+    if (settings) {
+      settings.showTitle = show;
+      await this.saveSettings(settings);
+    }
+  }
+
+  async getShowTitle(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings?.showTitle !== undefined ? settings.showTitle : true; // 預設顯示標題
+  }
+
   async getLastBackup(): Promise<Date | null> {
     const settings = await this.getSettings();
     return settings?.lastBackup || null;
