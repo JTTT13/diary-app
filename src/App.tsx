@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { AppLayout } from './components/AppLayout';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { DiaryList } from './components/DiaryList';
 import { DiaryEditor } from './components/DiaryEditor';
 import { StatisticsPanel } from './components/StatisticsPanel';
@@ -16,6 +18,18 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [showTitle, setShowTitle] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [viewHistory, setViewHistory] = useState<ViewType[]>(['diary']);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     initializeApp();
@@ -39,26 +53,102 @@ function App() {
     }
   };
 
+  // 顯示確認對話框
+  const showConfirm = useCallback((title: string, message: string, onConfirm: () => void) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm
+    });
+  }, []);
+
+  // 關閉對話框
+  const closeConfirm = useCallback(() => {
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  // 導航到新頁面並記錄歷史
+  const navigateToView = useCallback((view: ViewType) => {
+    setViewHistory(prev => [...prev, view]);
+    setCurrentView(view);
+  }, []);
+
+  // 底部導航切換 - 不累積歷史
+  const switchToView = useCallback((view: ViewType) => {
+    setViewHistory(['diary']); // 重置歷史為主頁
+    setCurrentView(view);
+  }, []);
+
+  // 返回上一頁
+  const goBack = useCallback(() => {
+    setViewHistory(prev => {
+      if (prev.length <= 1) {
+        // 如果已經是第一頁，彈出確認對話框
+        showConfirm('退出應用', '確定要退出應用嗎？', () => {
+          closeConfirm();
+          CapacitorApp.exitApp();
+        });
+        return prev;
+      }
+      
+      const newHistory = prev.slice(0, -1);
+      const previousView = newHistory[newHistory.length - 1];
+      setCurrentView(previousView);
+      
+      // 如果返回時不是編輯頁,清除編輯狀態
+      if (previousView !== 'editor') {
+        setEditingDiary(null);
+      }
+      
+      return newHistory;
+    });
+  }, [showConfirm, closeConfirm]);
+
+  // 監聽 Android 返回鍵
+  useEffect(() => {
+    let listenerHandle: any = null;
+
+    const setupBackButtonListener = async () => {
+      try {
+        listenerHandle = await CapacitorApp.addListener('backButton', () => {
+          goBack();
+        });
+      } catch (error) {
+        // 在瀏覽器環境中 Capacitor 可能不可用，忽略錯誤
+        console.log('Capacitor not available in browser environment');
+      }
+    };
+
+    setupBackButtonListener();
+
+    return () => {
+      if (listenerHandle && typeof listenerHandle.remove === 'function') {
+        listenerHandle.remove();
+      }
+    };
+  }, [goBack]);
+
   const handleNewDiary = useCallback(() => {
     setEditingDiary(null);
-    setCurrentView('editor');
-  }, []);
+    navigateToView('editor');
+  }, [navigateToView]);
 
   const handleEditDiary = useCallback((diary: DiaryEntry) => {
     setEditingDiary(diary);
-    setCurrentView('editor');
-  }, []);
+    navigateToView('editor');
+  }, [navigateToView]);
 
   const handleSave = useCallback(async () => {
-    setCurrentView('diary');
+    goBack();
     setEditingDiary(null);
     setRefreshTrigger(prev => prev + 1);
-  }, []);
+  }, [goBack]);
 
   const handleCancel = useCallback(() => {
-    setCurrentView('diary');
+    goBack();
     setEditingDiary(null);
-  }, []);
+  }, [goBack]);
 
   const toggleTheme = useCallback(async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -84,7 +174,7 @@ function App() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">記錄生活中的每一天</p>
               </div>
               <button
-                onClick={() => setCurrentView('settings')}
+                onClick={() => navigateToView('settings')}
                 className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                 title="設定"
               >
@@ -106,7 +196,7 @@ function App() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">查看你的日記統計</p>
               </div>
               <button
-                onClick={() => setCurrentView('settings')}
+                onClick={() => navigateToView('settings')}
                 className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                 title="設定"
               >
@@ -122,7 +212,7 @@ function App() {
       case 'editor':
         return <DiaryEditor diary={editingDiary} onSave={handleSave} onCancel={handleCancel} showTitle={showTitle} />;
       case 'settings':
-        return <Settings theme={theme} onToggleTheme={toggleTheme} showTitle={showTitle} onToggleShowTitle={toggleShowTitle} onBack={() => setCurrentView('diary')} />;
+        return <Settings theme={theme} onToggleTheme={toggleTheme} showTitle={showTitle} onToggleShowTitle={toggleShowTitle} onBack={goBack} />;
       default:
         return null;
     }
@@ -140,9 +230,22 @@ function App() {
   }
 
   return (
-    <AppLayout currentView={currentView} onViewChange={setCurrentView} onAddClick={handleNewDiary}>
-      {renderContent()}
-    </AppLayout>
+    <>
+      <AppLayout currentView={currentView} onViewChange={switchToView} onAddClick={handleNewDiary}>
+        {renderContent()}
+      </AppLayout>
+      
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="確定"
+        cancelText="取消"
+        confirmColor="red"
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
+    </>
   );
 }
 

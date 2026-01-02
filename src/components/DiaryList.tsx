@@ -1,5 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
+import { BottomSheet, type BottomSheetOption } from './BottomSheet';
+
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 interface DiaryListProps {
   onEdit: (diary: DiaryEntry) => void;
@@ -9,16 +27,18 @@ interface DiaryListProps {
 
 type SortType = 'date' | 'title' | 'wordCount';
 type SortOrder = 'asc' | 'desc';
-type FilterType = 'all' | 'starred' | 'archived';
+type FilterType = 'all' | 'starred' | 'archived' | `month-${string}`;
 
 export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
   const [filteredDiaries, setFilteredDiaries] = useState<DiaryEntry[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [loading, setLoading] = useState(true);
   const [sortType, setSortType] = useState<SortType>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterType, setFilterType] = useState<FilterType>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string>('');
   // 已移除 longPressId 和 menuPosition，改用批量模式
   
@@ -28,6 +48,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const longPressActive = useRef<boolean>(false);
+  const [showSortSheet, setShowSortSheet] = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
 
   useEffect(() => {
     loadDiaries();
@@ -35,7 +57,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
 
   useEffect(() => {
     filterAndSortDiaries();
-  }, [searchTerm, diaries, sortType, sortOrder, filterType]);
+  }, [debouncedSearchTerm, diaries, sortType, sortOrder, filterType]);
 
   useEffect(() => {
     if (actionFeedback) {
@@ -53,6 +75,10 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   useEffect(() => {
     setBatchMode(false);
     setSelectedIds(new Set());
+    // 切換到收藏或封存時，清除年月篩選
+    if (filterType !== 'all') {
+      setSelectedMonth(null);
+    }
   }, [filterType]);
 
   useEffect(() => {
@@ -61,6 +87,14 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setBatchMode(false);
     }
   }, [selectedIds, batchMode]);
+
+  // 選擇年月時退出批量模式
+  useEffect(() => {
+    if (selectedMonth) {
+      setBatchMode(false);
+      setSelectedIds(new Set());
+    }
+  }, [selectedMonth]);
 
   const loadDiaries = useCallback(async () => {
     try {
@@ -106,6 +140,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   const filterAndSortDiaries = useCallback(() => {
     let filtered = diaries;
     
+    // 先按類型篩選
     if (filterType === 'starred') {
       filtered = diaries.filter(diary => diary.isStarred && !diary.isArchived);
     } else if (filterType === 'archived') {
@@ -114,8 +149,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       filtered = diaries.filter(diary => !diary.isArchived);
     }
     
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
+    // 再按年月篩選
+    if (selectedMonth) {
+      filtered = filtered.filter(diary => {
+        const date = new Date(diary.createdAt);
+        const diaryYearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return diaryYearMonth === selectedMonth;
+      });
+    }
+    
+    if (debouncedSearchTerm) {
+      const lowerSearch = debouncedSearchTerm.toLowerCase();
       filtered = filtered.filter(diary =>
         diary.title.toLowerCase().includes(lowerSearch) ||
         diary.content.toLowerCase().includes(lowerSearch)
@@ -124,7 +168,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     
     const sorted = sortDiaries(filtered);
     setFilteredDiaries(sorted);
-  }, [diaries, filterType, searchTerm, sortDiaries]);
+  }, [diaries, filterType, selectedMonth, debouncedSearchTerm, sortDiaries]);
 
   const toggleSortOrder = useCallback(() => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -369,6 +413,157 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     });
   }, []);
 
+  // 排序選項
+  const sortOptions: BottomSheetOption[] = [
+    {
+      value: 'date-desc',
+      label: '最新優先',
+      description: '按建立時間由新到舊',
+      selected: sortType === 'date' && sortOrder === 'desc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+        </svg>
+      )
+    },
+    {
+      value: 'date-asc',
+      label: '最舊優先',
+      description: '按建立時間由舊到新',
+      selected: sortType === 'date' && sortOrder === 'asc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+        </svg>
+      )
+    },
+    {
+      value: 'title-asc',
+      label: '標題 A-Z',
+      description: '按標題字母順序排列',
+      selected: sortType === 'title' && sortOrder === 'asc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+        </svg>
+      )
+    },
+    {
+      value: 'title-desc',
+      label: '標題 Z-A',
+      description: '按標題字母倒序排列',
+      selected: sortType === 'title' && sortOrder === 'desc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+        </svg>
+      )
+    },
+    {
+      value: 'wordCount-desc',
+      label: '字數最多',
+      description: '按字數由多到少',
+      selected: sortType === 'wordCount' && sortOrder === 'desc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )
+    },
+    {
+      value: 'wordCount-asc',
+      label: '字數最少',
+      description: '按字數由少到多',
+      selected: sortType === 'wordCount' && sortOrder === 'asc',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )
+    }
+  ];
+
+  // 提取所有有日記的年月
+  const availableMonths = useMemo(() => {
+    const monthSet = new Map<string, number>();
+    diaries.forEach(diary => {
+      const date = new Date(diary.createdAt);
+      const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthSet.set(yearMonth, (monthSet.get(yearMonth) || 0) + 1);
+    });
+    return Array.from(monthSet.entries())
+      .sort((a, b) => b[0].localeCompare(a[0])) // 降序排列
+      .map(([yearMonth, count]) => {
+        const [year, month] = yearMonth.split('-');
+        return {
+          value: `month-${yearMonth}`,
+          label: `${year}年${parseInt(month)}月`,
+          count
+        };
+      });
+  }, [diaries]);
+
+  // 篩選選項
+  const filterOptions: BottomSheetOption[] = [
+    {
+      value: 'all',
+      label: `全部日記 (${diaries.filter(d => !d.isArchived).length})`,
+      selected: filterType === 'all',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+      )
+    },
+    {
+      value: 'starred',
+      label: `已收藏 (${diaries.filter(d => d.isStarred && !d.isArchived).length})`,
+      selected: filterType === 'starred',
+      icon: (
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      )
+    },
+    {
+      value: 'archived',
+      label: `已封存 (${diaries.filter(d => d.isArchived).length})`,
+      selected: filterType === 'archived',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      )
+    },
+    ...availableMonths.map(month => ({
+      value: month.value,
+      label: `${month.label} (${month.count})`,
+      selected: selectedMonth === month.value.replace('month-', ''),
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    }))
+  ];
+
+  const handleSortSelect = useCallback((value: string) => {
+    const [type, order] = value.split('-') as [SortType, SortOrder];
+    setSortType(type);
+    setSortOrder(order);
+  }, []);
+
+  const handleFilterSelect = useCallback((value: string) => {
+    if (value.startsWith('month-')) {
+      const yearMonth = value.replace('month-', '');
+      setSelectedMonth(yearMonth);
+      setFilterType('all'); // 年月篩選時設為 all，但用 selectedMonth 來過濾
+    } else {
+      setSelectedMonth(null);
+      setFilterType(value as FilterType);
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -457,21 +652,21 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       {/* 搜尋和排序控制 */}
       <div className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 pb-2 space-y-1.5">
         {/* 搜尋框 */}
-        <div className="relative">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="搜尋日記..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
           />
-          <svg className="absolute left-3 top-3 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -481,7 +676,43 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
         </div>
 
         {/* 過濾和排序按鈕 */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <button
+            onClick={() => setShowFilterSheet(true)}
+            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            {selectedMonth
+              ? (() => {
+                  const [year, month] = selectedMonth.split('-');
+                  return `${year}年${parseInt(month)}月`;
+                })()
+              : filterType === 'all'
+              ? '全部'
+              : filterType === 'starred'
+              ? '收藏'
+              : '封存'
+            }
+          </button>
+          
+          <button
+            onClick={() => setShowSortSheet(true)}
+            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {sortOrder === 'desc' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+              )}
+            </svg>
+            {sortType === 'date' ? '時間' : sortType === 'title' ? '標題' : '字數'}
+          </button>
+          
+          {/* 舊的按鈕保留但隱藏,方便日後刪除 */}
+          <div className="hidden">
           <button
             onClick={() => setFilterType('all')}
             className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
@@ -554,30 +785,32 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
               </svg>
             )}
           </button>
+          </div>
+          {/* 舊按鈕區塊結束 */}
         </div>
       </div>
 
       {/* 日記列表 */}
       {filteredDiaries.length === 0 ? (
         <div className="text-center py-16">
-          <div className="inline-block p-6 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
-            <svg className="w-16 h-16 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-block p-8 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-3xl mb-6 shadow-inner">
+            <svg className="w-20 h-20 text-blue-400 dark:text-blue-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <p className="text-xl font-medium text-gray-600 dark:text-gray-400 mb-2">
+          <p className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-2">
             {searchTerm ? '找不到相關日記' : '還沒有日記'}
           </p>
-          <p className="text-gray-500 dark:text-gray-500 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-8 text-lg">
             {searchTerm ? '試試其他搜尋詞' : '點擊下方按鈕開始寫第一篇日記'}
           </p>
           {!searchTerm && (
             <button
               onClick={onNew}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white rounded-2xl shadow-2xl hover:shadow-purple-500/30 transition-all duration-300 transform hover:scale-105 active:scale-95"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
               寫第一篇日記
             </button>
@@ -599,11 +832,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
                 onMouseDown={(e) => handleLongPressStart(diary.id, e)}
                 onMouseUp={handleLongPressEnd}
                 onMouseLeave={handleLongPressEnd}
-                className={`stagger-item card-hover relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all cursor-pointer border-2 ${
+                className={`stagger-item card-hover relative bg-white dark:bg-gray-800/95 rounded-2xl shadow-md hover:shadow-xl dark:shadow-gray-900/50 transition-all duration-300 cursor-pointer border-2 ${
                   batchMode && selectedIds.has(diary.id)
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-transparent'
-                }`}
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-blue-500/20'
+                    : 'border-transparent hover:border-gray-200 dark:hover:border-gray-700'
+                } backdrop-blur-sm`}
                 style={{ animationDelay: `${Math.min(filteredDiaries.indexOf(diary) * 0.05, 0.4)}s` }}
               >
                 <div className="p-5">
@@ -686,6 +919,24 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       )}
 
       {/* 長按菜單已移除，改為直接進入批量選擇模式 */}
+      
+      {/* 排序選單 */}
+      <BottomSheet
+        isOpen={showSortSheet}
+        title="排序方式"
+        options={sortOptions}
+        onSelect={handleSortSelect}
+        onClose={() => setShowSortSheet(false)}
+      />
+      
+      {/* 篩選選單 */}
+      <BottomSheet
+        isOpen={showFilterSheet}
+        title="篩選日記"
+        options={filterOptions}
+        onSelect={handleFilterSelect}
+        onClose={() => setShowFilterSheet(false)}
+      />
     </div>
   );
 }

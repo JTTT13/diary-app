@@ -13,7 +13,7 @@ export const BottomNav = memo(function BottomNav({ currentView = 'diary', onView
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 glass-effect border-t border-gray-200 dark:border-gray-700 z-40 nav-enter">
+    <nav className="fixed bottom-0 left-0 right-0 glass-effect border-t border-gray-200 dark:border-gray-700 z-40 nav-enter shadow-[0_-4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4 relative">
         {/* 日記 */}
         <button
@@ -31,9 +31,9 @@ export const BottomNav = memo(function BottomNav({ currentView = 'diary', onView
         {/* 寫日記 - 中間浮動大按鈕 */}
         <button
           onClick={onAddClick}
-          className="absolute left-1/2 -translate-x-1/2 -top-6 flex items-center justify-center w-14 h-14 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full shadow-lg hover:shadow-xl fab-enhanced gradient-breath spring-bounce hover:scale-110 active:scale-95"
+          className="absolute left-1/2 -translate-x-1/2 -top-6 flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-full shadow-2xl shadow-purple-500/50 hover:shadow-purple-500/70 fab-enhanced gradient-breath spring-bounce hover:scale-110 active:scale-95 ring-4 ring-white dark:ring-gray-900 z-50"
         >
-          <svg className="w-8 h-8 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
           </svg>
         </button>
