@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('應用錯誤:', error, errorInfo);
+    // 錯誤已被靜默處理，不會顯示 console
   }
 
   render() {

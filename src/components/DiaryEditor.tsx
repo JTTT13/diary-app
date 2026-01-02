@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
 
 interface DiaryEditorProps {
@@ -29,7 +29,6 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
       currentDiaryIdRef.current = diary.id;
       setCreatedTime(diary.createdAt);
       setSaveStatus('saved');
-      updateWordCount(plainText);
       initialLoadRef.current = false;
     } else {
       setTitle('');
@@ -55,7 +54,6 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
 
     if (title.trim() || content.trim()) {
       setSaveStatus('saving');
-      updateWordCount(content);
       saveTimeoutRef.current = window.setTimeout(async () => {
         await autoSave();
       }, 500);
@@ -68,12 +66,9 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
     };
   }, [title, content]);
 
-  const updateWordCount = (text: string) => {
-    const cleanText = text.replace(/<[^>]*>/g, '').trim();
-    if (!cleanText) {
-      setWordCount(0);
-      return;
-    }
+  const calculatedWordCount = useMemo(() => {
+    const cleanText = content.replace(/<[^>]*>/g, '').trim();
+    if (!cleanText) return 0;
 
     let totalCount = 0;
     const cjkChars = cleanText.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
@@ -86,10 +81,14 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
       .filter(word => word.length > 0 && /[a-zA-Z0-9]/.test(word));
     
     totalCount += englishWords.length;
-    setWordCount(totalCount);
-  };
+    return totalCount;
+  }, [content]);
 
-  const autoSave = async () => {
+  useEffect(() => {
+    setWordCount(calculatedWordCount);
+  }, [calculatedWordCount]);
+
+  const autoSave = useCallback(async () => {
     if (!title.trim() && !content.trim()) {
       setSaveStatus('saved');
       return;
@@ -141,32 +140,31 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
 
       setSaveStatus('saved');
     } catch (error) {
-      console.error('自動儲存失敗:', error);
       setSaveStatus('unsaved');
     }
-  };
+  }, [title, content, diary]);
 
-  const handleComplete = () => {
+  const handleComplete = useCallback(() => {
     onSave();
-  };
+  }, [onSave]);
 
-  const getSaveStatusText = () => {
+  const getSaveStatusText = useCallback(() => {
     switch (saveStatus) {
       case 'saved': return '已儲存';
       case 'saving': return '儲存中...';
       case 'unsaved': return '未儲存';
     }
-  };
+  }, [saveStatus]);
 
-  const getSaveStatusColor = () => {
+  const getSaveStatusColor = useCallback(() => {
     switch (saveStatus) {
       case 'saved': return 'text-green-600 dark:text-green-400';
       case 'saving': return 'text-blue-600 dark:text-blue-400';
       case 'unsaved': return 'text-orange-600 dark:text-orange-400';
     }
-  };
+  }, [saveStatus]);
 
-  const formatDateTime = (date: Date) => {
+  const formatDateTime = useCallback((date: Date) => {
     return new Date(date).toLocaleString('zh-TW', {
       year: 'numeric',
       month: 'long',
@@ -176,14 +174,14 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
       second: '2-digit',
       hour12: false
     });
-  };
+  }, []);
 
-  const getEditorMode = () => {
+  const getEditorMode = useCallback(() => {
     return diary ? '編輯中' : '新日記';
-  };
+  }, [diary]);
 
   return (
-    <div className="fixed inset-0 flex flex-col h-screen overflow-hidden bg-white dark:bg-gray-900">
+    <div className="fixed inset-0 flex flex-col h-screen overflow-hidden bg-white dark:bg-gray-900 page-transition-enter">
       {/* 頂部工具欄 */}
       <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
         <div className="flex items-start justify-between">
@@ -219,14 +217,6 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
                 <span>創建於：{formatDateTime(createdTime)}</span>
               </div>
               
-              {diary && diary.isEdited && diary.updatedAt && (
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-500">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  <span>編輯於：{formatDateTime(diary.updatedAt)}</span>
-                </div>
-              )}
             </div>
 
             {/* 編輯記錄按鈕 */}
@@ -251,7 +241,7 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
           {/* 右側完成按鈕 */}
           <button
             onClick={handleComplete}
-            className="flex-shrink-0 ml-4 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-full shadow-md hover:shadow-lg transition-all transform hover:scale-105"
+            className="flex-shrink-0 ml-4 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-full shadow-md hover:shadow-lg spring-bounce hover:scale-105 active:scale-95 gradient-breath"
           >
             完成
           </button>

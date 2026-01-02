@@ -1,23 +1,25 @@
+import { memo } from 'react';
+
 interface BottomNavProps {
   currentView?: 'diary' | 'statistics' | 'editor' | 'settings';
   onViewChange?: (view: 'diary' | 'statistics' | 'editor' | 'settings') => void;
   onAddClick?: () => void;
 }
 
-export function BottomNav({ currentView = 'diary', onViewChange, onAddClick }: BottomNavProps) {
+export const BottomNav = memo(function BottomNav({ currentView = 'diary', onViewChange, onAddClick }: BottomNavProps) {
   // 只在非編輯和設定頁面顯示底部導航
   if (currentView === 'editor' || currentView === 'settings') {
     return null;
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40">
+    <nav className="fixed bottom-0 left-0 right-0 glass-effect border-t border-gray-200 dark:border-gray-700 z-40 nav-enter">
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-4 relative">
         {/* 日記 */}
         <button
           onClick={() => onViewChange?.('diary')}
-          className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-            currentView === 'diary' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+          className={`flex flex-col items-center justify-center flex-1 h-full smooth-spring ${
+            currentView === 'diary' ? 'text-blue-600 dark:text-blue-400 icon-active' : 'text-gray-500 dark:text-gray-400'
           }`}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -29,9 +31,9 @@ export function BottomNav({ currentView = 'diary', onViewChange, onAddClick }: B
         {/* 寫日記 - 中間浮動大按鈕 */}
         <button
           onClick={onAddClick}
-          className="absolute left-1/2 -translate-x-1/2 -top-6 flex items-center justify-center w-14 h-14 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105 active:scale-95"
+          className="absolute left-1/2 -translate-x-1/2 -top-6 flex items-center justify-center w-14 h-14 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full shadow-lg hover:shadow-xl fab-enhanced gradient-breath spring-bounce hover:scale-110 active:scale-95"
         >
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-8 h-8 text-white relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
           </svg>
         </button>
@@ -39,8 +41,8 @@ export function BottomNav({ currentView = 'diary', onViewChange, onAddClick }: B
         {/* 統計 */}
         <button
           onClick={() => onViewChange?.('statistics')}
-          className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-            currentView === 'statistics' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+          className={`flex flex-col items-center justify-center flex-1 h-full smooth-spring ${
+            currentView === 'statistics' ? 'text-blue-600 dark:text-blue-400 icon-active' : 'text-gray-500 dark:text-gray-400'
           }`}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,4 +53,4 @@ export function BottomNav({ currentView = 'diary', onViewChange, onAddClick }: B
       </div>
     </nav>
   );
-}
+});

@@ -22,7 +22,6 @@ export function DataManagement() {
 
       alert('JSON 匯出成功！');
     } catch (error) {
-      console.error('JSON 匯出失敗:', error);
       alert('JSON 匯出失敗，請稍後再試');
     } finally {
       setIsExporting(false);
@@ -45,7 +44,6 @@ export function DataManagement() {
       alert('資料匯入成功！頁面將重新載入');
       window.location.reload();
     } catch (error) {
-      console.error('匯入失敗:', error);
       alert('匯入失敗，請確認檔案格式是否正確');
     } finally {
       setIsImporting(false);
@@ -66,7 +64,6 @@ export function DataManagement() {
       alert('所有日記已刪除');
       window.location.reload();
     } catch (error) {
-      console.error('刪除失敗:', error);
       alert('刪除失敗，請稍後再試');
     }
   };
@@ -146,7 +143,6 @@ export function DataManagement() {
       window.location.reload();
       
     } catch (error) {
-      console.error('批量導入失敗:', error);
       alert('導入失敗，請檢查格式');
     }
   };
@@ -154,13 +150,13 @@ export function DataManagement() {
   return (
     <div className="space-y-6">
       {/* 匯出數據 */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+      <div className="stagger-item card-hover bg-gray-50 dark:bg-gray-800 rounded-lg p-4" style={{ animationDelay: '0.05s' }}>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">匯出數據</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">將你的日記資料匯出為 JSON 格式</p>
         <button
           onClick={handleExportJSON}
           disabled={isExporting}
-          className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg spring-bounce disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
         >
           {isExporting ? (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -174,7 +170,7 @@ export function DataManagement() {
       </div>
 
       {/* 匯入數據 */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+      <div className="stagger-item card-hover bg-gray-50 dark:bg-gray-800 rounded-lg p-4" style={{ animationDelay: '0.1s' }}>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">匯入數據</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">從 JSON 檔案還原你的日記</p>
         <label className="block">
@@ -188,8 +184,8 @@ export function DataManagement() {
           />
           <label
             htmlFor="import-file"
-            className={`px-4 py-3 rounded-lg transition flex items-center justify-center gap-2 cursor-pointer ${
-              isImporting ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-purple-500 hover:bg-purple-600 text-white'
+            className={`px-4 py-3 rounded-lg spring-bounce flex items-center justify-center gap-2 cursor-pointer ${
+              isImporting ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-purple-500 hover:bg-purple-600 text-white hover:scale-105 active:scale-95'
             }`}
           >
             {isImporting ? (
@@ -205,7 +201,7 @@ export function DataManagement() {
       </div>
 
       {/* 智能批量導入 */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+      <div className="stagger-item card-hover bg-gray-50 dark:bg-gray-800 rounded-lg p-4" style={{ animationDelay: '0.15s' }}>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">📝 智能批量導入</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           貼上帶日期的文字，每條日記格式：內容 + 日期時間（如：30/12/2025 19:31）
@@ -217,7 +213,7 @@ export function DataManagement() {
         />
         <button
           onClick={handleBulkImport}
-          className="w-full px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg transition flex items-center justify-center gap-2"
+          className="w-full px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-lg spring-bounce flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -227,12 +223,12 @@ export function DataManagement() {
       </div>
 
       {/* 刪除所有資料 */}
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-red-200 dark:border-red-900">
+      <div className="stagger-item card-hover bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-red-200 dark:border-red-900" style={{ animationDelay: '0.2s' }}>
         <h3 className="font-semibold text-red-600 dark:text-red-400 mb-3">危險區域</h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">刪除所有日記資料，此操作無法復原</p>
         <button
           onClick={handleClearAll}
-          className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition flex items-center justify-center gap-2"
+          className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg spring-bounce flex items-center justify-center gap-2 hover:scale-105 active:scale-95"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -242,7 +238,7 @@ export function DataManagement() {
       </div>
 
       {/* 最後備份時間 */}
-      <div className="bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg p-4">
+      <div className="stagger-item card-hover bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg p-4" style={{ animationDelay: '0.25s' }}>
         <h3 className="font-semibold mb-2">最後備份時間</h3>
         <div className="text-sm opacity-90">
           {lastBackup ? (

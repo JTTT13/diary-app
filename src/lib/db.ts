@@ -146,6 +146,76 @@ export class DiaryDBService {
     });
   }
 
+  // 優化：按日期範圍查詢
+  async getDiariesByDateRange(startDate: Date, endDate: Date): Promise<DiaryEntry[]> {
+    return this.dbOperation('diary', 'readonly', (tx) => {
+      return new Promise((resolve, reject) => {
+        const index = tx.objectStore('diary').index('by-date');
+        const range = IDBKeyRange.bound(startDate, endDate);
+        const request = index.getAll(range);
+        
+        request.onsuccess = () => {
+          const entries = request.result.map((entry: any) => this.normalizeDiaryEntry(entry));
+          resolve(entries);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
+  // 優化:只獲取打星日記
+  async getStarredDiaries(): Promise<DiaryEntry[]> {
+    return this.dbOperation('diary', 'readonly', (tx) => {
+      return new Promise((resolve, reject) => {
+        const index = tx.objectStore('diary').index('by-starred');
+        const request = index.getAll(IDBKeyRange.only(true));
+        
+        request.onsuccess = () => {
+          const entries = request.result
+            .filter((entry: any) => !entry.isArchived)
+            .map((entry: any) => this.normalizeDiaryEntry(entry));
+          resolve(entries);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
+  // 優化:批量操作
+  async batchUpdateDiaries(updates: Array<{ id: string; updates: Partial<Omit<DiaryEntry, 'id' | 'createdAt'>> }>): Promise<void> {
+    return this.dbOperation<void>('diary', 'readwrite', async (tx) => {
+      return new Promise<void>((resolve, reject) => {
+        const store = tx.objectStore('diary');
+        let completed = 0;
+        
+        updates.forEach(({ id, updates: diaryUpdates }) => {
+          const getRequest = store.get(id);
+          
+          getRequest.onsuccess = () => {
+            const existing = getRequest.result;
+            if (existing) {
+              const updated = { ...existing, ...diaryUpdates, updatedAt: new Date() };
+              const putRequest = store.put(updated);
+              
+              putRequest.onsuccess = () => {
+                completed++;
+                if (completed === updates.length) resolve();
+              };
+              putRequest.onerror = () => reject(putRequest.error);
+            } else {
+              completed++;
+              if (completed === updates.length) resolve();
+            }
+          };
+          
+          getRequest.onerror = () => reject(getRequest.error);
+        });
+        
+        if (updates.length === 0) resolve();
+      });
+    });
+  }
+
   async getDiary(id: string): Promise<DiaryEntry | undefined> {
     return this.dbOperation('diary', 'readonly', (tx) => {
       return new Promise((resolve, reject) => {

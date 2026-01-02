@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from './components/AppLayout';
 import { DiaryList } from './components/DiaryList';
 import { DiaryEditor } from './components/DiaryEditor';
@@ -39,45 +39,45 @@ function App() {
     }
   };
 
-  const handleNewDiary = () => {
+  const handleNewDiary = useCallback(() => {
     setEditingDiary(null);
     setCurrentView('editor');
-  };
+  }, []);
 
-  const handleEditDiary = (diary: DiaryEntry) => {
+  const handleEditDiary = useCallback((diary: DiaryEntry) => {
     setEditingDiary(diary);
     setCurrentView('editor');
-  };
+  }, []);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setCurrentView('diary');
     setEditingDiary(null);
     setRefreshTrigger(prev => prev + 1);
-  };
+  }, []);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setCurrentView('diary');
     setEditingDiary(null);
-  };
+  }, []);
 
-  const toggleTheme = async () => {
+  const toggleTheme = useCallback(async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     applyTheme(newTheme);
     await dbService.setTheme(newTheme);
-  };
+  }, [theme]);
   
-  const toggleShowTitle = async () => {
+  const toggleShowTitle = useCallback(async () => {
     const newValue = !showTitle;
     setShowTitle(newValue);
     await dbService.setShowTitle(newValue);
-  };
+  }, [showTitle]);
 
   const renderContent = () => {
     switch (currentView) {
       case 'diary':
         return (
-          <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <div className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">我的日記</h1>
@@ -99,7 +99,7 @@ function App() {
         );
       case 'statistics':
         return (
-          <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <div className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">統計分析</h1>

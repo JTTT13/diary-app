@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
 
 interface DiaryListProps {
@@ -62,20 +62,19 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     }
   }, [selectedIds, batchMode]);
 
-  const loadDiaries = async () => {
+  const loadDiaries = useCallback(async () => {
     try {
       setLoading(true);
       const data = await dbService.getAllDiaries();
       setDiaries(data);
     } catch (error) {
-      console.error('載入日記失敗:', error);
       setActionFeedback('載入失敗，請重試');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const sortDiaries = (diariesToSort: DiaryEntry[]): DiaryEntry[] => {
+  const sortDiaries = useCallback((diariesToSort: DiaryEntry[]): DiaryEntry[] => {
     const sorted = [...diariesToSort];
     
     switch (sortType) {
@@ -102,9 +101,9 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     }
     
     return sorted;
-  };
+  }, [sortType, sortOrder]);
 
-  const filterAndSortDiaries = () => {
+  const filterAndSortDiaries = useCallback(() => {
     let filtered = diaries;
     
     if (filterType === 'starred') {
@@ -116,26 +115,27 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     }
     
     if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(diary =>
-        diary.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        diary.content.toLowerCase().includes(searchTerm.toLowerCase())
+        diary.title.toLowerCase().includes(lowerSearch) ||
+        diary.content.toLowerCase().includes(lowerSearch)
       );
     }
     
     const sorted = sortDiaries(filtered);
     setFilteredDiaries(sorted);
-  };
+  }, [diaries, filterType, searchTerm, sortDiaries]);
 
-  const toggleSortOrder = () => {
+  const toggleSortOrder = useCallback(() => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
-  };
+  }, []);
 
-  const toggleBatchMode = () => {
+  const toggleBatchMode = useCallback(() => {
     setBatchMode(prev => !prev);
     setSelectedIds(new Set());
-  };
+  }, []);
 
-  const toggleSelectDiary = (id: string) => {
+  const toggleSelectDiary = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -145,17 +145,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = useCallback(() => {
     if (selectedIds.size === filteredDiaries.length) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(filteredDiaries.map(d => d.id)));
     }
-  };
+  }, [selectedIds.size, filteredDiaries]);
 
-  const getSelectedDiariesStatus = () => {
+  const getSelectedDiariesStatus = useCallback(() => {
     const selectedDiaries = diaries.filter(d => selectedIds.has(d.id));
     const allStarred = selectedDiaries.every(d => d.isStarred);
     const allArchived = selectedDiaries.every(d => d.isArchived);
@@ -168,9 +168,9 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       someStarred,
       someArchived,
     };
-  };
+  }, [diaries, selectedIds]);
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     
     if (!confirm(`確定要刪除 ${selectedIds.size} 篇日記嗎？此操作無法復原！`)) {
@@ -185,12 +185,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setActionFeedback(`已刪除 ${selectedIds.size} 篇日記`);
       setBatchMode(false);
     } catch (error) {
-      console.error('批量刪除失敗:', error);
       setActionFeedback('刪除失敗');
     }
-  };
+  }, [selectedIds, loadDiaries]);
 
-  const handleBatchToggleStar = async () => {
+  const handleBatchToggleStar = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
     try {
@@ -212,12 +211,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setActionFeedback(`已${actionText} ${selectedIds.size} 篇日記`);
       setBatchMode(false);
     } catch (error) {
-      console.error('批量打星失敗:', error);
       setActionFeedback('操作失敗');
     }
-  };
+  }, [selectedIds, getSelectedDiariesStatus, diaries, loadDiaries]);
 
-  const handleBatchToggleArchive = async () => {
+  const handleBatchToggleArchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
     try {
@@ -239,12 +237,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setActionFeedback(`已${actionText} ${selectedIds.size} 篇日記`);
       setBatchMode(false);
     } catch (error) {
-      console.error('批量封存失敗:', error);
       setActionFeedback('操作失敗');
     }
-  };
+  }, [selectedIds, getSelectedDiariesStatus, diaries, loadDiaries]);
 
-  const handleLongPressStart = (id: string, e: React.TouchEvent | React.MouseEvent) => {
+  const handleLongPressStart = useCallback((id: string, e: React.TouchEvent | React.MouseEvent) => {
     if (batchMode) return;
     
     longPressActive.current = false;
@@ -265,9 +262,9 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
         navigator.vibrate([50, 30, 50]); // 雙重震動表示進入選擇模式
       }
     }, 500);
-  };
+  }, [batchMode]);
 
-  const handleLongPressEnd = (e?: React.TouchEvent | React.MouseEvent) => {
+  const handleLongPressEnd = useCallback((e?: React.TouchEvent | React.MouseEvent) => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
@@ -283,9 +280,9 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       e.preventDefault();
       e.stopPropagation();
     }
-  };
+  }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (touchStartPos.current && longPressTimer.current) {
       const touch = e.touches[0];
       const deltaX = Math.abs(touch.clientX - touchStartPos.current.x);
@@ -296,17 +293,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
         longPressTimer.current = null;
       }
     }
-  };
+  }, []);
 
-  const handleCardClick = (diary: DiaryEntry, e: React.MouseEvent) => {
+  const handleCardClick = useCallback((diary: DiaryEntry, e: React.MouseEvent) => {
     if (batchMode) {
       toggleSelectDiary(diary.id);
     } else if (!longPressActive.current) {
       onEdit(diary);
     }
-  };
+  }, [batchMode, toggleSelectDiary, onEdit]);
 
-  const handleToggleStar = async (id: string, e?: React.MouseEvent) => {
+  const handleToggleStar = useCallback(async (id: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -319,12 +316,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setActionFeedback(diary?.isStarred ? '已取消打星' : '已打星');
       // closeMenu 已移除
     } catch (error) {
-      console.error('切換打星失敗:', error);
       setActionFeedback('操作失敗');
     }
-  };
+  }, [diaries, loadDiaries]);
 
-  const handleToggleArchive = async (id: string) => {
+  const handleToggleArchive = useCallback(async (id: string) => {
     try {
       const diary = diaries.find(d => d.id === id);
       await dbService.toggleArchived(id);
@@ -332,12 +328,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setActionFeedback(diary?.isArchived ? '已取消封存' : '已封存');
       // closeMenu 已移除
     } catch (error) {
-      console.error('切換封存失敗:', error);
       setActionFeedback('操作失敗');
     }
-  };
+  }, [diaries, loadDiaries]);
 
-  const handleDelete = async (id: string, e?: React.MouseEvent) => {
+  const handleDelete = useCallback(async (id: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -350,20 +345,19 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
         setActionFeedback('已刪除');
         // closeMenu 已移除
       } catch (error) {
-        console.error('刪除日記失敗:', error);
         setActionFeedback('刪除失敗');
       }
     }
     // closeMenu 已移除
-  };
+  }, [loadDiaries]);
 
-  const stripHtml = (html: string) => {
+  const stripHtml = useCallback((html: string) => {
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     return tmp.textContent || tmp.innerText || '';
-  };
+  }, []);
 
-  const formatDateTime = (date: Date) => {
+  const formatDateTime = useCallback((date: Date) => {
     const d = new Date(date);
     return d.toLocaleString('zh-TW', {
       year: 'numeric',
@@ -373,7 +367,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       minute: '2-digit',
       hour12: false
     });
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -605,11 +599,12 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
                 onMouseDown={(e) => handleLongPressStart(diary.id, e)}
                 onMouseUp={handleLongPressEnd}
                 onMouseLeave={handleLongPressEnd}
-                className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border-2 ${
+                className={`stagger-item card-hover relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all cursor-pointer border-2 ${
                   batchMode && selectedIds.has(diary.id)
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-transparent'
                 }`}
+                style={{ animationDelay: `${Math.min(filteredDiaries.indexOf(diary) * 0.05, 0.4)}s` }}
               >
                 <div className="p-5">
                   {/* 頂部信息行 */}
