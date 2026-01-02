@@ -43,6 +43,36 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
       timeHeatmap[hour][day]++;
     });
 
+    /* [Vibe] 計算連續寫作天數 (Streak) */
+    const sortedDates = [...entries]
+      .map(d => new Date(d.createdAt).toDateString())
+      .filter((date, index, self) => self.indexOf(date) === index) // 去重
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()) // 降序：最新在最前
+
+    let currentStreak = 0
+    
+    // 計算 Current Streak
+    if (sortedDates.length > 0) {
+      const today = new Date().toDateString()
+      const yesterday = new Date(Date.now() - 86400000).toDateString()
+      const lastWriteDate = sortedDates[0]
+
+      // 如果最後一次寫作是今天或昨天，那麼 Streak 依然有效
+      if (lastWriteDate === today || lastWriteDate === yesterday) {
+        currentStreak = 1
+        let checkDate = new Date(lastWriteDate)
+        
+        for (let i = 1; i < sortedDates.length; i++) {
+          checkDate.setDate(checkDate.getDate() - 1) // 往前推一天
+          if (sortedDates[i] === checkDate.toDateString()) {
+            currentStreak++
+          } else {
+            break
+          }
+        }
+      }
+    }
+
     return {
       totalEntries,
       totalWords,
@@ -50,11 +80,12 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
       monthlyCount,
       lastEntryDate,
       timeHeatmap,
+      currentStreak, // [Vibe] 新增欄位
     };
   }, [cachedDiaries, refreshTrigger]);
 
   // 解構統計數據以便使用
-  const { totalEntries, totalWords, avgWords, monthlyCount, lastEntryDate, timeHeatmap } = statistics;
+  const { totalEntries, totalWords, avgWords, monthlyCount, lastEntryDate, timeHeatmap, currentStreak } = statistics;
 
   const getHeatmapColor = (count: number, maxCount: number): string => {
     if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
@@ -83,6 +114,27 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
 
   return (
     <div className="space-y-6">
+      {/* [Vibe] 新增 Streak 卡片，激勵用戶 */}
+      <div
+        className="stagger-item card-hover bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl p-6 shadow-lg transform hover:scale-[1.02] transition-all"
+        style={{ animationDelay: '0s' }}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-white/80 text-sm font-medium mb-1">連續寫作</p>
+            <h3 className="text-3xl font-bold flex items-baseline gap-2">
+              {currentStreak}
+              <span className="text-lg font-normal opacity-80">天</span>
+            </h3>
+          </div>
+          <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+             <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+               <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.298-2.54a1 1 0 00-1.712-1.223 7.606 7.606 0 00-1.29 2.213c-.569 1.543-.635 3.195-.19 4.773a7.525 7.525 0 003.528 4.673 7.53 7.53 0 004.887.27 7.506 7.506 0 004.103-3.69 7.545 7.545 0 00.32-4.938c-.372-1.505-1.168-2.905-2.193-4.045a8.773 8.773 0 00-2.316-1.83zM9.9 14.5a1 1 0 110-2 1 1 0 010 2z" clipRule="evenodd" />
+             </svg>
+          </div>
+        </div>
+      </div>
+
       {/* 統計卡片 */}
       <div className="grid grid-cols-2 gap-4">
         <div className="stagger-item card-hover bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-6 shadow-sm border border-blue-200 dark:border-blue-800" style={{ animationDelay: '0.05s' }}>

@@ -25,13 +25,17 @@ interface DiaryListProps {
   refreshTrigger: number;
   cachedDiaries?: DiaryEntry[];
   onDiariesChange?: (diaries: DiaryEntry[]) => void;
+  /* [Vibe] 接收外部的選單狀態控制 */
+  isMenuOpen?: boolean;
+  onMenuOpenChange?: (isOpen: boolean) => void;
+  showOnThisDay?: boolean;
 }
 
 type SortType = 'date' | 'title' | 'wordCount';
 type SortOrder = 'asc' | 'desc';
 type FilterType = 'all' | 'starred' | 'archived' | `month-${string}`;
 
-export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiariesChange }: DiaryListProps) {
+export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiariesChange, isMenuOpen, onMenuOpenChange, showOnThisDay = true }: DiaryListProps) {
   const [diaries, setDiaries] = useState<DiaryEntry[]>(cachedDiaries || []);
   // [Vibe] Persistence: 記住搜尋狀態
   const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('diary_search_term') || '');
@@ -42,6 +46,27 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string>('');
+  
+  /* [Vibe] 同步狀態給父層 App.tsx 以攔截返回鍵 */
+  const [activeSheet, setActiveSheet] = useState<'sort' | 'filter' | null>(null);
+  
+  /* [Vibe] 當年今日 State */
+  const [dismissedMemory, setDismissedMemory] = useState<string | null>(() => {
+    return localStorage.getItem('dismissed_memory_date')
+  });
+  
+  useEffect(() => {
+    if (onMenuOpenChange) {
+      onMenuOpenChange(!!activeSheet);
+    }
+  }, [activeSheet, onMenuOpenChange]);
+
+  /* [Vibe] 如果父層要求關閉 (例如按了返回鍵)，則關閉 */
+  useEffect(() => {
+    if (isMenuOpen === false) {
+      setActiveSheet(null);
+    }
+  }, [isMenuOpen]);
   
   // [Vibe] Persistence: 更新時寫入 Storage
   useEffect(() => {
@@ -82,8 +107,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const longPressActive = useRef<boolean>(false);
-  const [showSortSheet, setShowSortSheet] = useState(false);
-  const [showFilterSheet, setShowFilterSheet] = useState(false);
+  
+  // 移除 Pull to Refresh 狀態和處理函數
 
   // 輔助函數：移除 HTML 標籤
   const stripHtml = useCallback((html: string) => {
@@ -221,6 +246,32 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     
     return sorted;
   }, [diaries, filterType, selectedMonth, debouncedSearchTerm, sortType, sortOrder, stripHtml]);
+
+  /* [Vibe] 計算當年今日的回顧 */
+  const memoryDiary = useMemo(() => {
+    if (loading || diaries.length === 0) return null;
+    const today = new Date();
+    const month = today.getMonth();
+    const date = today.getDate();
+    
+    // 尋找過去年份的同一天
+    return diaries.find(d => {
+      const dDate = new Date(d.createdAt);
+      return dDate.getMonth() === month &&
+             dDate.getDate() === date &&
+             dDate.getFullYear() < today.getFullYear(); // 必須是過去的年份
+    });
+  }, [diaries, loading]);
+
+  const handleDismissMemory = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const todayStr = new Date().toDateString();
+    localStorage.setItem('dismissed_memory_date', todayStr);
+    setDismissedMemory(todayStr);
+  };
+
+  // 渲染判斷
+  const showMemoryCard = showOnThisDay && memoryDiary && dismissedMemory !== new Date().toDateString();
 
   const toggleSortOrder = useCallback(() => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -560,6 +611,36 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, []);
 
+  /* [Vibe] Confetti 動畫函數 */
+  const triggerConfetti = useCallback((x: number, y: number) => {
+    const colors = ['confetti-red', 'confetti-blue', 'confetti-yellow', 'confetti-green', 'confetti-purple'];
+    const particleCount = 12;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const particle = document.createElement('div');
+      particle.className = `confetti-particle ${colors[Math.floor(Math.random() * colors.length)]}`;
+      
+      // 隨機偏移位置
+      const offsetX = (Math.random() - 0.5) * 60;
+      const offsetY = (Math.random() - 0.5) * 40;
+      
+      particle.style.left = `${x + offsetX}px`;
+      particle.style.top = `${y + offsetY}px`;
+      
+      // 隨機延遲
+      particle.style.animationDelay = `${Math.random() * 0.1}s`;
+      
+      document.body.appendChild(particle);
+      
+      // 動畫結束後移除
+      setTimeout(() => {
+        if (particle.parentNode) {
+          particle.parentNode.removeChild(particle);
+        }
+      }, 1000);
+    }
+  }, []);
+
   // 只有在真正需要等待資料且沒有任何日記時才顯示 loading
   if (loading && diaries.length === 0) {
     return (
@@ -572,79 +653,71 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const selectedStatus = getSelectedDiariesStatus();
 
   return (
-    <div className="space-y-0">
-      {actionFeedback && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg animate-slide-down">
-          {actionFeedback}
-        </div>
-      )}
-
-      {batchMode && (
-        <div className="fixed bottom-20 left-0 right-0 z-30 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg">
-          <div className="container mx-auto px-4 py-3 max-w-4xl">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={toggleSelectAll}
-                  className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
-                >
-                  {selectedIds.size === filteredDiaries.length ? '取消全選' : '全選'}
-                </button>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  已選 {selectedIds.size} 篇
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                {filterType !== 'archived' && (
-                  <button
-                    onClick={handleBatchToggleStar}
-                    disabled={selectedIds.size === 0}
-                    className="p-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={selectedStatus.allStarred ? '取消收藏' : '收藏'}
-                  >
-                    <svg className="w-5 h-5" fill={selectedStatus.allStarred ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                  </button>
-                )}
-
-                <button
-                  onClick={handleBatchToggleArchive}
-                  disabled={selectedIds.size === 0}
-                  className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={selectedStatus.allArchived ? '取消封存' : '封存'}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
-                </button>
-
-                <button
-                  onClick={handleBatchDelete}
-                  disabled={selectedIds.size === 0}
-                  className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="刪除"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-
-                <button
-                  onClick={() => setBatchMode(false)}
-                  className="p-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition"
-                  title="取消"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+    <div
+      className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter min-h-screen"
+    >
+      <div>
+        {actionFeedback && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg animate-slide-down">
+            {actionFeedback}
           </div>
+        )}
+
+      {/* [Vibe] Floating Action Bar (Batch Mode) */}
+      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${batchMode ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
+        <div className="bg-gray-900/90 dark:bg-gray-800/95 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 border border-white/10">
+          
+          {/* 顯示選取數量 */}
+          <span className="font-bold text-sm min-w-[20px]">{selectedIds.size}</span>
+          <div className="w-px h-4 bg-gray-600"></div>
+
+          {/* Star Button (Dynamic Icon) */}
+          <button
+            onClick={handleBatchToggleStar}
+            disabled={selectedIds.size === 0}
+            className={`flex flex-col items-center gap-1 active:scale-90 transition disabled:opacity-50 ${selectedStatus.allStarred ? 'text-yellow-400' : 'text-white'}`}
+          >
+            {selectedStatus.allStarred ? (
+              // 實心星星 (代表全都是星標，點擊取消)
+              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.784.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+            ) : (
+              // 空心星星 (代表有點擊可以加星)
+              <svg className="w-6 h-6 fill-none stroke-current" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.784.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
+            )}
+          </button>
+
+          {/* Archive Button (Dynamic Icon) */}
+          <button
+             onClick={handleBatchToggleArchive}
+             disabled={selectedIds.size === 0}
+             className={`flex flex-col items-center gap-1 active:scale-90 transition disabled:opacity-50 ${selectedStatus.allArchived ? 'text-blue-400' : 'text-white'}`}
+          >
+            {selectedStatus.allArchived ? (
+              // 實心/有顏色的封存 (代表已封存，點擊解封)
+              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M4 4h16v2H4zM4 8h16v12H4z" /></svg>
+            ) : (
+              // 空心封存
+              <svg className="w-6 h-6 fill-none stroke-current" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+            )}
+          </button>
+
+          {/* Delete Button (Red) */}
+          <button
+             onClick={handleBatchDelete}
+             disabled={selectedIds.size === 0}
+             className="flex flex-col items-center gap-1 active:scale-90 transition text-red-400 disabled:opacity-50"
+          >
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+          
+          <div className="w-px h-4 bg-gray-600"></div>
+
+          {/* Select All */}
+          <button onClick={toggleSelectAll} className="text-xs font-medium active:scale-95">
+             {selectedIds.size === filteredDiaries.length ? '全不選' : '全選'}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* 搜尋和排序控制 */}
       {/* [Vibe] 增加 -mx-4 px-4 讓背景延伸到邊緣，並加強 pb 創造空間感 */}
@@ -683,7 +756,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         {/* 過濾和排序按鈕 */}
         <div className="flex items-center gap-2 overflow-x-auto">
           <button
-            onClick={() => setShowFilterSheet(true)}
+            onClick={() => setActiveSheet('filter')}
             className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -703,7 +776,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
           </button>
           
           <button
-            onClick={() => setShowSortSheet(true)}
+            onClick={() => setActiveSheet('sort')}
             className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -719,6 +792,40 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
       </div>
 
       {/* 日記列表 */}
+      
+      {/* [Vibe] 當年今日卡片 */}
+      {showMemoryCard && !searchTerm && filterType === 'all' && (
+        <div
+          onClick={() => onEdit(memoryDiary)}
+          className="mb-6 p-5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg text-white cursor-pointer transform hover:scale-[1.02] transition-all relative overflow-hidden group"
+        >
+          {/* Dismiss Button */}
+          <button
+            onClick={handleDismissMemory}
+            className="absolute top-2 right-2 p-1.5 bg-black/20 hover:bg-black/40 rounded-full text-white/80 transition-colors z-20"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+
+          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-xl group-hover:bg-white/20 transition-all"></div>
+          
+          <div className="flex items-center gap-2 mb-2 text-indigo-100 text-sm font-medium">
+             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+             當年今日 ({new Date(memoryDiary.createdAt).getFullYear()})
+          </div>
+          
+          {/* Title Logic: 有標題顯示標題，沒標題什麼都不顯示(或直接顯示內容) */}
+          {memoryDiary.title && (
+            <h3 className="text-xl font-bold mb-1 line-clamp-1">{memoryDiary.title}</h3>
+          )}
+          
+          {/* Content: 如果沒標題，內容字體大一點；有標題則正常 */}
+          <p className={`text-indigo-100 line-clamp-2 opacity-90 ${!memoryDiary.title ? 'text-lg font-medium' : 'text-sm'}`}>
+            {memoryDiary.content}
+          </p>
+        </div>
+      )}
+
       {filteredDiaries.length === 0 ? (
         <div className="text-center py-16">
           <div className="inline-block p-8 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-3xl mb-6 shadow-inner">
@@ -771,38 +878,69 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                 } backdrop-blur-sm`}
                 style={{ animationDelay: `${Math.min(filteredDiaries.indexOf(diary) * 0.05, 0.4)}s` }}
               >
-                <div className="p-5">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div className="flex-1 min-w-0">
-                      {hasTitle && (
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 line-clamp-2">
-                          {diary.title}
-                        </h3>
-                      )}
-                      
-                      <div className="flex items-center gap-2 flex-wrap text-sm text-gray-500 dark:text-gray-400">
-                        <span>{formatDateTime(diary.createdAt)}</span>
+                <div className="p-5 relative">
+                   {/* [Vibe] 右上角星星 (Absolute Position) - 批量模式下隱藏 */}
+                   {!batchMode && (
+                   <button
+                     onClick={async (e) => {
+                       e.stopPropagation();
+                       if (navigator.vibrate) navigator.vibrate(50);
+                       const newStatus = !diary.isStarred;
+                       await dbService.toggleStarred(diary.id);
+                       if (onDiariesChange && cachedDiaries) {
+                         onDiariesChange(cachedDiaries.map(d => d.id === diary.id ? {...d, isStarred: newStatus} : d));
+                       }
+                     }}
+                     className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-90 transition-all z-10 group/star"
+                   >
+                     <svg
+                       className={`w-6 h-6 transition-all duration-300 ${
+                         diary.isStarred
+                           ? 'text-yellow-400 fill-yellow-400 drop-shadow-sm scale-110 animate-pop'
+                           : 'text-gray-300 dark:text-gray-600 fill-transparent stroke-current hover:text-yellow-400 dark:hover:text-yellow-400'
+                       }`}
+                       viewBox="0 0 24 24"
+                     >
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.784.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                     </svg>
+                   </button>
+                   )}
+ 
+                   <div className="flex items-center justify-between gap-3 mb-3">
+                     <div className="flex-1 min-w-0">
+                       {hasTitle && (
+                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 line-clamp-2">
+                           {diary.title}
+                         </h3>
+                       )}
                         
-                        {diary.isEdited && (
-                          <>
-                            <span>•</span>
-                            <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                              已編輯
-                            </span>
-                          </>
-                        )}
+                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2 flex-wrap text-sm text-gray-500 dark:text-gray-400">
+                          <span>{formatDateTime(diary.createdAt)}</span>
+                          
+                          {diary.isEdited && (
+                            <>
+                              <span>•</span>
+                              <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                已編輯
+                              </span>
+                            </>
+                          )}
+                          
+                          <span>•</span>
+                          <span>{diary.wordCount} 字</span>
+                        </div>
                         
-                        <span>•</span>
-                        <span>{diary.wordCount} 字</span>
+                        {/* [Vibe] 移除右下角星星按鈕 (改由長按 Action Bar 處理) */}
                       </div>
                     </div>
 
-                    {/* [Vibe] 固定寬度容器：確保 Arrow 和 Checkbox 切換時不影響 Layout */}
-                    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center ml-2">
-                      {batchMode ? (
+                    {/* [Vibe] Batch Mode 時顯示 Checkbox，平時不顯示任何右側圖標 */}
+                    {batchMode && (
+                      <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center ml-2">
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
@@ -820,19 +958,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                             </svg>
                           )}
                         </div>
-                      ) : (
-                        <>
-                          {diary.isStarred && (
-                            <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          )}
-                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* [Vibe] text-sm (14px) 改為 text-xs (12px) 或保持 text-sm 但改 leading-snug 讓排版更緊湊 */}
@@ -853,22 +980,23 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         </div>
       )}
       
-      {/* 選單部分保持不變 */}
+      {/* 選單部分修改為使用 activeSheet */}
       <BottomSheet
-        isOpen={showSortSheet}
+        isOpen={activeSheet === 'sort'}
         title="排序方式"
         options={sortOptions}
-        onSelect={handleSortSelect}
-        onClose={() => setShowSortSheet(false)}
+        onSelect={(val) => { handleSortSelect(val); setActiveSheet(null); }}
+        onClose={() => setActiveSheet(null)}
       />
       
       <BottomSheet
-        isOpen={showFilterSheet}
+        isOpen={activeSheet === 'filter'}
         title="篩選日記"
         options={filterOptions}
-        onSelect={handleFilterSelect}
-        onClose={() => setShowFilterSheet(false)}
+        onSelect={(val) => { handleFilterSelect(val); setActiveSheet(null); }}
+        onClose={() => setActiveSheet(null)}
       />
+      </div> {/* Close the wrapper div */}
     </div>
   );
 }

@@ -17,6 +17,7 @@ function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [showTitle, setShowTitle] = useState(true);
+  const [showOnThisDay, setShowOnThisDay] = useState(true);
   const [isDbReady, setIsDbReady] = useState(false);
   const [cachedDiaries, setCachedDiaries] = useState<DiaryEntry[]>([]);
   const [viewHistory, setViewHistory] = useState<ViewType[]>(['diary']);
@@ -31,6 +32,9 @@ function App() {
     message: '',
     onConfirm: () => {}
   });
+  
+  /* [Vibe] 用於攔截返回鍵：如果選單打開，返回鍵應該先關選單 */
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -44,6 +48,8 @@ function App() {
       applyTheme(savedTheme);
       const savedShowTitle = await dbService.getShowTitle();
       setShowTitle(savedShowTitle);
+      const savedShowOnThisDay = await dbService.getShowOnThisDay();
+      setShowOnThisDay(savedShowOnThisDay);
       // 預先加載日記數據
       try {
         const diaries = await dbService.getAllDiaries();
@@ -97,6 +103,12 @@ function App() {
 
   // 返回上一頁
   const goBack = useCallback(() => {
+    /* [Vibe] 優先處理選單關閉 */
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
+      return;
+    }
+
     setViewHistory(prev => {
       if (prev.length <= 1) {
         // 如果已經是第一頁，彈出確認對話框
@@ -118,7 +130,7 @@ function App() {
       
       return newHistory;
     });
-  }, [showConfirm, closeConfirm]);
+  }, [showConfirm, closeConfirm, isMenuOpen]);
 
   // 監聽 Android 返回鍵
   useEffect(() => {
@@ -181,12 +193,19 @@ function App() {
     await dbService.setShowTitle(newValue);
   }, [showTitle]);
 
+  const toggleShowOnThisDay = useCallback(async () => {
+    const newValue = !showOnThisDay;
+    setShowOnThisDay(newValue);
+    await dbService.setShowOnThisDay(newValue);
+  }, [showOnThisDay]);
+
   const renderContent = () => {
     switch (currentView) {
       case 'diary':
         return (
           <div className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter">
-            <div className="flex items-center justify-between mb-6">
+            {/* [Vibe] 縮小標題與 Search Bar 之間的距離 (mb-6 -> mb-2) */}
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">我的日記</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">記錄生活中的每一天</p>
@@ -208,6 +227,10 @@ function App() {
               refreshTrigger={refreshTrigger}
               cachedDiaries={cachedDiaries}
               onDiariesChange={setCachedDiaries}
+              /* [Vibe] 傳遞選單狀態控制權 */
+              isMenuOpen={isMenuOpen}
+              onMenuOpenChange={setIsMenuOpen}
+              showOnThisDay={showOnThisDay}
             />
           </div>
         );
@@ -239,7 +262,15 @@ function App() {
       case 'editor':
         return <DiaryEditor diary={editingDiary} onSave={handleSave} onCancel={handleCancel} showTitle={showTitle} />;
       case 'settings':
-        return <Settings theme={theme} onToggleTheme={toggleTheme} showTitle={showTitle} onToggleShowTitle={toggleShowTitle} onBack={goBack} />;
+        return <Settings
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          showTitle={showTitle}
+          onToggleShowTitle={toggleShowTitle}
+          showOnThisDay={showOnThisDay}
+          onToggleShowOnThisDay={toggleShowOnThisDay}
+          onBack={goBack}
+        />;
       default:
         return null;
     }

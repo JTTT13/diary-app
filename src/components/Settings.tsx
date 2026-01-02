@@ -7,10 +7,12 @@ interface SettingsProps {
   onToggleTheme: () => void;
   showTitle: boolean;
   onToggleShowTitle: () => void;
+  showOnThisDay?: boolean;
+  onToggleShowOnThisDay?: () => void;
   onBack: () => void;
 }
 
-export function Settings({ theme, onToggleTheme, showTitle, onToggleShowTitle, onBack }: SettingsProps) {
+export function Settings({ theme, onToggleTheme, showTitle, onToggleShowTitle, showOnThisDay, onToggleShowOnThisDay, onBack }: SettingsProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 page-transition-enter pb-6">
@@ -98,9 +100,47 @@ export function Settings({ theme, onToggleTheme, showTitle, onToggleShowTitle, o
           </div>
         </div>
 
+        {/* 當年今日設定 */}
+        <div className="stagger-item card-hover bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6" style={{ animationDelay: '0.15s' }}>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            當年今日
+          </h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white">當年今日</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">顯示去年的今天的日記回顧</div>
+            </div>
+            <button
+              onClick={onToggleShowOnThisDay}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full smooth-spring ${
+                showOnThisDay ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm spring-bounce ${
+                  showOnThisDay ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* 數據管理 */}
         <div className="stagger-item" style={{ animationDelay: '0.15s' }}>
           <DataManagement />
+        </div>
+
+        {/* 版本資訊 */}
+        <div className="stagger-item mt-8 text-center" style={{ animationDelay: '0.2s' }}>
+          <p className="text-sm text-gray-400 dark:text-gray-600 font-medium">
+            Diary App v1.0.0 (Build 2026.01)
+          </p>
+          <p className="text-xs text-gray-300 dark:text-gray-700 mt-1">
+            Designed with Vibe
+          </p>
         </div>
       </div>
     </div>

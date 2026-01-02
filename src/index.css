@@ -612,3 +612,43 @@ input, textarea, [contenteditable="true"] {
   user-select: text;
   -webkit-touch-callout: default;
 }
+
+/* Star Click Animation */
+@keyframes pop-star {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+.animate-pop {
+  animation: pop-star 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Confetti Particles */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti-particle {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  animation: confetti-fall 1s ease-out forwards;
+}
+
+/* Confetti colors */
+.confetti-red { background: #ff6b6b; }
+.confetti-blue { background: #4dabf7; }
+.confetti-yellow { background: #ffd43b; }
+.confetti-green { background: #51cf66; }
+.confetti-purple { background: #cc5de8; }

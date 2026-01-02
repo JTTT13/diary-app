@@ -16,6 +16,8 @@ export interface DiaryEntry {
 
 export interface AppSettings {
   theme: 'light' | 'dark';
+  showTitle?: boolean;
+  showOnThisDay?: boolean;
   lastBackup: Date | null;
 }
 
@@ -355,6 +357,19 @@ export class DiaryDBService {
   async getShowTitle(): Promise<boolean> {
     const settings = await this.getSettings();
     return settings?.showTitle !== undefined ? settings.showTitle : true; // 預設顯示標題
+  }
+
+  async getShowOnThisDay(): Promise<boolean> {
+    const settings = await this.getSettings();
+    return settings?.showOnThisDay !== undefined ? settings.showOnThisDay : true; // 預設開啟
+  }
+
+  async setShowOnThisDay(show: boolean): Promise<void> {
+    const settings = await this.getSettings();
+    if (settings) {
+      settings.showOnThisDay = show;
+      await this.saveSettings(settings);
+    }
   }
 
   async getLastBackup(): Promise<Date | null> {
