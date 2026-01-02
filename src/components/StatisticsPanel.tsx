@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
 
 interface StatisticsPanelProps {
@@ -7,83 +7,54 @@ interface StatisticsPanelProps {
 }
 
 export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPanelProps) {
-  const [totalEntries, setTotalEntries] = useState(0);
-  const [totalWords, setTotalWords] = useState(0);
-  const [monthlyCount, setMonthlyCount] = useState(0);
-  const [avgWords, setAvgWords] = useState(0);
-  const [lastEntryDate, setLastEntryDate] = useState<Date | null>(null);
-  const [timeHeatmap, setTimeHeatmap] = useState<number[][]>([]);
-  const [loading, setLoading] = useState(false);
+  // 使用 useMemo 即時計算統計數據,避免初次渲染閃爍
+  const statistics = useMemo(() => {
+    const entries: DiaryEntry[] = cachedDiaries || [];
+    
+    // 基本統計
+    const totalEntries = entries.length;
+    const totalWords = entries.reduce((sum, entry) => sum + entry.wordCount, 0);
+    const avgWords = entries.length > 0 ? Math.round(totalWords / entries.length) : 0;
 
-  // 使用緩存數據初始化
-  useEffect(() => {
-    if (cachedDiaries && cachedDiaries.length > 0) {
-      loadStatistics();
+    // 本月統計
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const thisMonthEntries = entries.filter(entry => {
+      const entryDate = new Date(entry.createdAt);
+      return entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
+    });
+    const monthlyCount = thisMonthEntries.length;
+
+    // 最後日記日期
+    let lastEntryDate: Date | null = null;
+    if (entries.length > 0) {
+      const sortedEntries = [...entries].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      lastEntryDate = new Date(sortedEntries[0].createdAt);
     }
-  }, [cachedDiaries]);
 
-  useEffect(() => {
-    loadStatistics();
-  }, [refreshTrigger]);
-
-  const loadStatistics = async () => {
-    try {
-      // 優先使用緩存數據
-      let entries: DiaryEntry[] = cachedDiaries || [];
-      if (!cachedDiaries || cachedDiaries.length === 0) {
-        setLoading(true);
-        try {
-          entries = await dbService.getAllDiaries();
-        } catch (error) {
-          console.error('載入統計數據失敗:', error);
-          entries = [];
-        }
-      }
-      
-      setTotalEntries(entries.length);
-      
-      const words = entries.reduce((sum, entry) => sum + entry.wordCount, 0);
-      setTotalWords(words);
-      setAvgWords(entries.length > 0 ? Math.round(words / entries.length) : 0);
-
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      const thisMonthEntries = entries.filter(entry => {
-        const entryDate = new Date(entry.createdAt);
-        return entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear;
-      });
-      setMonthlyCount(thisMonthEntries.length);
-
-      // 獲取最後寫日記的日期
-      if (entries.length > 0) {
-        const sortedEntries = [...entries].sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setLastEntryDate(new Date(sortedEntries[0].createdAt));
-      }
-
-      // 計算時間熱力圖
-      const heatmap = calculateTimeHeatmap(entries);
-      setTimeHeatmap(heatmap);
-    } catch (error) {
-      console.error('統計載入錯誤:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateTimeHeatmap = (entries: DiaryEntry[]): number[][] => {
-    const heatmap: number[][] = Array.from({ length: 24 }, () => Array(7).fill(0));
-
+    // 時間熱力圖
+    const timeHeatmap: number[][] = Array.from({ length: 24 }, () => Array(7).fill(0));
     entries.forEach(entry => {
       const date = new Date(entry.createdAt);
       const hour = date.getHours();
       const day = date.getDay();
-      heatmap[hour][day]++;
+      timeHeatmap[hour][day]++;
     });
 
-    return heatmap;
-  };
+    return {
+      totalEntries,
+      totalWords,
+      avgWords,
+      monthlyCount,
+      lastEntryDate,
+      timeHeatmap,
+    };
+  }, [cachedDiaries, refreshTrigger]);
+
+  // 解構統計數據以便使用
+  const { totalEntries, totalWords, avgWords, monthlyCount, lastEntryDate, timeHeatmap } = statistics;
 
   const getHeatmapColor = (count: number, maxCount: number): string => {
     if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
@@ -105,13 +76,7 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  // loading 狀態已移除,因為使用 useMemo 即時計算
 
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
   const maxCount = Math.max(...timeHeatmap.flat());

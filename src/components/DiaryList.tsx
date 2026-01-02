@@ -33,16 +33,15 @@ type FilterType = 'all' | 'starred' | 'archived' | `month-${string}`;
 
 export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiariesChange }: DiaryListProps) {
   const [diaries, setDiaries] = useState<DiaryEntry[]>(cachedDiaries || []);
-  const [filteredDiaries, setFilteredDiaries] = useState<DiaryEntry[]>([]);
+  // 移除 filteredDiaries 狀態，改用 useMemo
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const [loading, setLoading] = useState(false); // 默認不顯示 loading
+  const [loading, setLoading] = useState(false);
   const [sortType, setSortType] = useState<SortType>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string>('');
-  // 已移除 longPressId 和 menuPosition，改用批量模式
   
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -53,25 +52,27 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
 
+  // 輔助函數：移除 HTML 標籤
+  const stripHtml = useCallback((html: string) => {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  }, []);
+
   // 使用緩存數據初始化
   useEffect(() => {
-    // 優先使用快取資料，立即顯示，避免空狀態閃現
     if (cachedDiaries && cachedDiaries.length > 0) {
       setDiaries(cachedDiaries);
       setLoading(false);
     } else if (cachedDiaries && cachedDiaries.length === 0) {
-      // 快取資料為空陣列（表示確實沒有日記）
       setDiaries([]);
       setLoading(false);
     } else {
-      // cachedDiaries 為 undefined，需要等待載入
       setLoading(true);
     }
   }, [cachedDiaries]);
 
-  useEffect(() => {
-    filterAndSortDiaries();
-  }, [debouncedSearchTerm, diaries, sortType, sortOrder, filterType, selectedMonth]);
+  // 移除舊的 filterAndSortDiaries useEffect
 
   useEffect(() => {
     if (actionFeedback) {
@@ -89,20 +90,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   useEffect(() => {
     setBatchMode(false);
     setSelectedIds(new Set());
-    // 切換到收藏或封存時，清除年月篩選
     if (filterType !== 'all') {
       setSelectedMonth(null);
     }
   }, [filterType]);
 
   useEffect(() => {
-    // 當批量模式下沒有選中任何日記時，自動退出
     if (batchMode && selectedIds.size === 0) {
       setBatchMode(false);
     }
   }, [selectedIds, batchMode]);
 
-  // 選擇年月時退出批量模式
   useEffect(() => {
     if (selectedMonth) {
       setBatchMode(false);
@@ -112,8 +110,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   const loadDiaries = useCallback(async () => {
     try {
-      // 只有在真正需要重新載入時才顯示 loading
-      // 如果已有快取資料，不顯示 loading 狀態
       if (diaries.length === 0) {
         setLoading(true);
       }
@@ -130,9 +126,43 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, [onDiariesChange, diaries.length]);
 
-  const sortDiaries = useCallback((diariesToSort: DiaryEntry[]): DiaryEntry[] => {
-    const sorted = [...diariesToSort];
+  // 將排序邏輯改為普通函數供 useMemo 使用，或直接在 useMemo 內部實現
+  // 這裡我們直接在 filteredDiaries 的 useMemo 中處理，減少複雜度
+
+  // 使用 useMemo 替代 filteredDiaries state 和 useEffect
+  // 這樣即使是第一次 render，只要 diaries 有值，filteredDiaries 就會有值
+  const filteredDiaries = useMemo(() => {
+    let result = diaries;
     
+    // 1. 篩選
+    if (filterType === 'starred') {
+      result = diaries.filter(diary => diary.isStarred && !diary.isArchived);
+    } else if (filterType === 'archived') {
+      result = diaries.filter(diary => diary.isArchived);
+    } else {
+      result = diaries.filter(diary => !diary.isArchived);
+    }
+    
+    // 2. 年月篩選
+    if (selectedMonth) {
+      result = result.filter(diary => {
+        const date = new Date(diary.createdAt);
+        const diaryYearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return diaryYearMonth === selectedMonth;
+      });
+    }
+    
+    // 3. 搜尋
+    if (debouncedSearchTerm) {
+      const lowerSearch = debouncedSearchTerm.toLowerCase();
+      result = result.filter(diary =>
+        diary.title.toLowerCase().includes(lowerSearch) ||
+        diary.content.toLowerCase().includes(lowerSearch)
+      );
+    }
+    
+    // 4. 排序
+    const sorted = [...result];
     switch (sortType) {
       case 'date':
         sorted.sort((a, b) => {
@@ -157,40 +187,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
     
     return sorted;
-  }, [sortType, sortOrder]);
-
-  const filterAndSortDiaries = useCallback(() => {
-    let filtered = diaries;
-    
-    // 先按類型篩選
-    if (filterType === 'starred') {
-      filtered = diaries.filter(diary => diary.isStarred && !diary.isArchived);
-    } else if (filterType === 'archived') {
-      filtered = diaries.filter(diary => diary.isArchived);
-    } else {
-      filtered = diaries.filter(diary => !diary.isArchived);
-    }
-    
-    // 再按年月篩選
-    if (selectedMonth) {
-      filtered = filtered.filter(diary => {
-        const date = new Date(diary.createdAt);
-        const diaryYearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        return diaryYearMonth === selectedMonth;
-      });
-    }
-    
-    if (debouncedSearchTerm) {
-      const lowerSearch = debouncedSearchTerm.toLowerCase();
-      filtered = filtered.filter(diary =>
-        diary.title.toLowerCase().includes(lowerSearch) ||
-        diary.content.toLowerCase().includes(lowerSearch)
-      );
-    }
-    
-    const sorted = sortDiaries(filtered);
-    setFilteredDiaries(sorted);
-  }, [diaries, filterType, selectedMonth, debouncedSearchTerm, sortDiaries]);
+  }, [diaries, filterType, selectedMonth, debouncedSearchTerm, sortType, sortOrder, stripHtml]);
 
   const toggleSortOrder = useCallback(() => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -319,13 +316,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     
     longPressTimer.current = setTimeout(() => {
       longPressActive.current = true;
-      
-      // 直接進入批量模式而不是顯示菜單
       setBatchMode(true);
       setSelectedIds(new Set([id]));
       
       if (navigator.vibrate) {
-        navigator.vibrate([50, 30, 50]); // 雙重震動表示進入選擇模式
+        navigator.vibrate([50, 30, 50]);
       }
     }, 500);
   }, [batchMode]);
@@ -336,12 +331,10 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
       longPressTimer.current = null;
     }
 
-    // 清理所有狀態
     touchStartPos.current = null;
     const wasLongPress = longPressActive.current;
     longPressActive.current = false;
 
-    // 如果是長按觸發的,不執行點擊事件
     if (wasLongPress && e) {
       e.preventDefault();
       e.stopPropagation();
@@ -369,59 +362,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, [batchMode, toggleSelectDiary, onEdit]);
 
-  const handleToggleStar = useCallback(async (id: string, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    
-    try {
-      const diary = diaries.find(d => d.id === id);
-      await dbService.toggleStarred(id);
-      await loadDiaries();
-      setActionFeedback(diary?.isStarred ? '已取消打星' : '已打星');
-      // closeMenu 已移除
-    } catch (error) {
-      setActionFeedback('操作失敗');
-    }
-  }, [diaries, loadDiaries]);
-
-  const handleToggleArchive = useCallback(async (id: string) => {
-    try {
-      const diary = diaries.find(d => d.id === id);
-      await dbService.toggleArchived(id);
-      await loadDiaries();
-      setActionFeedback(diary?.isArchived ? '已取消封存' : '已封存');
-      // closeMenu 已移除
-    } catch (error) {
-      setActionFeedback('操作失敗');
-    }
-  }, [diaries, loadDiaries]);
-
-  const handleDelete = useCallback(async (id: string, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-    
-    if (confirm('確定要刪除這篇日記嗎？')) {
-      try {
-        await dbService.deleteDiary(id);
-        await loadDiaries();
-        setActionFeedback('已刪除');
-        // closeMenu 已移除
-      } catch (error) {
-        setActionFeedback('刪除失敗');
-      }
-    }
-    // closeMenu 已移除
-  }, [loadDiaries]);
-
-  const stripHtml = useCallback((html: string) => {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
-  }, []);
+  // stripHtml 移至前面定義
 
   const formatDateTime = useCallback((date: Date) => {
     const d = new Date(date);
@@ -509,13 +450,13 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const availableMonths = useMemo(() => {
     const monthSet = new Map<string, number>();
     diaries.forEach(diary => {
-      if (diary.isArchived) return; // 排除已封存的日記
+      if (diary.isArchived) return;
       const date = new Date(diary.createdAt);
       const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       monthSet.set(yearMonth, (monthSet.get(yearMonth) || 0) + 1);
     });
     return Array.from(monthSet.entries())
-      .sort((a, b) => b[0].localeCompare(a[0])) // 降序排列
+      .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([yearMonth, count]) => {
         const [year, month] = yearMonth.split('-');
         return {
@@ -734,83 +675,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
             </svg>
             {sortType === 'date' ? '時間' : sortType === 'title' ? '標題' : '字數'}
           </button>
-          
-          {/* 舊的按鈕保留但隱藏,方便日後刪除 */}
-          <div className="hidden">
-          <button
-            onClick={() => setFilterType('all')}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-              filterType === 'all'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-            <span className="text-xs"></span>
-            <span className="text-xs font-semibold">{diaries.filter(d => !d.isArchived).length}</span>
-          </button>
-          
-          <button
-            onClick={() => setFilterType('starred')}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-              filterType === 'starred'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-            </svg>
-            <span className="text-xs"></span>
-            <span className="text-xs font-semibold">{diaries.filter(d => d.isStarred && !d.isArchived).length}</span>
-          </button>
-          
-          <button
-            onClick={() => setFilterType('archived')}
-            className={`flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium transition flex items-center gap-1.5 ${
-              filterType === 'archived'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-            }`}
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-            </svg>
-            <span className="text-xs"></span>
-            <span className="text-xs font-semibold">{diaries.filter(d => d.isArchived).length}</span>
-          </button>
-
-          <div className="flex-1" />
-
-          {/* 排序控制 */}
-          <select
-            value={sortType}
-            onChange={(e) => setSortType(e.target.value as SortType)}
-            className="flex-shrink-0 px-2.5 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-          >
-            <option value="date">日期</option>
-            <option value="title">標題</option>
-            <option value="wordCount">字數</option>
-          </select>
-
-          <button
-            onClick={toggleSortOrder}
-            className="flex-shrink-0 px-2.5 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center justify-center"
-          >
-            {sortOrder === 'desc' ? (
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
-              </svg>
-            )}
-          </button>
-          </div>
-          {/* 舊按鈕區塊結束 */}
         </div>
       </div>
 
@@ -864,10 +728,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                 style={{ animationDelay: `${Math.min(filteredDiaries.indexOf(diary) * 0.05, 0.4)}s` }}
               >
                 <div className="p-5">
-                  {/* 頂部信息行 */}
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex-1 min-w-0">
-                      {/* 只有在有標題時才顯示標題 */}
                       {hasTitle && (
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 line-clamp-2">
                           {diary.title}
@@ -877,7 +739,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                       <div className="flex items-center gap-2 flex-wrap text-sm text-gray-500 dark:text-gray-400">
                         <span>{formatDateTime(diary.createdAt)}</span>
                         
-                        {/* 已編輯標記 */}
                         {diary.isEdited && (
                           <>
                             <span>•</span>
@@ -895,7 +756,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                       </div>
                     </div>
 
-                    {/* 右側圖標 */}
                     <div className="flex-shrink-0 w-8 flex items-center justify-center">
                       {batchMode && (
                         <div
@@ -931,7 +791,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                     </div>
                   </div>
 
-                  {/* 內容預覽 */}
                   <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-3 leading-relaxed">
                     {cleanContent}
                   </p>
@@ -942,9 +801,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         </div>
       )}
 
-      {/* 長按菜單已移除，改為直接進入批量選擇模式 */}
-      
-      {/* 排序選單 */}
+      {/* 選單部分保持不變 */}
       <BottomSheet
         isOpen={showSortSheet}
         title="排序方式"
@@ -953,7 +810,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         onClose={() => setShowSortSheet(false)}
       />
       
-      {/* 篩選選單 */}
       <BottomSheet
         isOpen={showFilterSheet}
         title="篩選日記"
