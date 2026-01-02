@@ -245,13 +245,17 @@ function App() {
     }
   };
 
-  // 等待數據庫初始化
-  if (!isDbReady) {
-    return null; // 或者返回一個空白頁面，避免白色 loading
-  }
-
   return (
     <>
+      {!isDbReady && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+            <p className="text-gray-400 text-sm">載入中...</p>
+          </div>
+        </div>
+      )}
+      
       <AppLayout currentView={currentView} onViewChange={switchToView} onAddClick={handleNewDiary}>
         {renderContent()}
       </AppLayout>

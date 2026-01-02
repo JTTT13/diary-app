@@ -55,13 +55,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   // 使用緩存數據初始化
   useEffect(() => {
+    // 優先使用快取資料，立即顯示，避免空狀態閃現
     if (cachedDiaries && cachedDiaries.length > 0) {
       setDiaries(cachedDiaries);
       setLoading(false);
-    } else {
-      // 如果沒有緩存數據，設置為空數組並關閉 loading
+    } else if (cachedDiaries && cachedDiaries.length === 0) {
+      // 快取資料為空陣列（表示確實沒有日記）
       setDiaries([]);
       setLoading(false);
+    } else {
+      // cachedDiaries 為 undefined，需要等待載入
+      setLoading(true);
     }
   }, [cachedDiaries]);
 
@@ -108,7 +112,11 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   const loadDiaries = useCallback(async () => {
     try {
-      setLoading(true);
+      // 只有在真正需要重新載入時才顯示 loading
+      // 如果已有快取資料，不顯示 loading 狀態
+      if (diaries.length === 0) {
+        setLoading(true);
+      }
       const data = await dbService.getAllDiaries();
       setDiaries(data);
       if (onDiariesChange) {
@@ -120,7 +128,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     } finally {
       setLoading(false);
     }
-  }, [onDiariesChange]);
+  }, [onDiariesChange, diaries.length]);
 
   const sortDiaries = useCallback((diariesToSort: DiaryEntry[]): DiaryEntry[] => {
     const sorted = [...diariesToSort];
@@ -579,7 +587,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, []);
 
-  if (loading) {
+  // 只有在真正需要等待資料且沒有任何日記時才顯示 loading
+  if (loading && diaries.length === 0) {
     return (
       <div className="flex justify-center items-center py-12">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
