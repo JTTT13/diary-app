@@ -747,7 +747,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   return (
     <div
-      className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter min-h-screen"
+      className="container mx-auto px-4 py-0 max-w-4xl page-transition-enter min-h-screen"
     >
       {/* [Vibe] Animation: 添加 transition-opacity 實現 Apple 風格的無縫出現 */}
       <div className={`transition-opacity duration-300 ease-out ${isRestored ? 'opacity-100' : 'opacity-0'}`}>
@@ -814,20 +814,21 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
       </div>
 
       {/* 搜尋和排序控制 */}
-      {/* [Vibe] 增加 -mx-4 px-4 讓背景延伸到邊緣，並加強 pb 創造空間感 */}
-      <div className="sticky top-0 z-30 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 space-y-1.5 transition-all">
-        {/* 搜尋框 */}
-        {/* [Vibe] 確保 relative 存在，讓 absolute 子元素定位正確 */}
-        <div className="relative flex-1 group">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+      {/* [Vibe] 移除 -mx-4 px-4 避免額外空位，直接使用容器內寬度 */}
+      <div className="sticky top-0 z-30 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-md pb-4 pt-2 space-y-3 transition-all">
+        {/* [Vibe] iOS Style Search Bar */}
+        <div className="relative group px-0">
+          <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
+            <svg className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="搜尋日記..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-700/50 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all duration-200 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-400"
+            className="w-full bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-white rounded-xl py-3 pl-12 pr-4 text-[17px] focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-blue-500/20 transition-all duration-300 outline-none placeholder-gray-500 border-none"
           />
           {searchTerm && (
             <button
@@ -851,7 +852,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         <div className="flex items-center gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveSheet('filter')}
-            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
+            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -871,7 +872,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
           
           <button
             onClick={() => setActiveSheet('sort')}
-            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
+            className="flex-shrink-0 px-3 py-2 bg-white dark:bg-gray-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {sortOrder === 'desc' ? (

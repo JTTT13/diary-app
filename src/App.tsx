@@ -204,11 +204,13 @@ function App() {
       case 'diary':
         return (
           <div className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter">
-            {/* [Vibe] 縮小標題與 Search Bar 之間的距離 (mb-6 -> mb-2) */}
-            <div className="flex items-center justify-between mb-2">
+            {/* [Vibe] iOS Large Title Header with Original Settings Button */}
+            <div className="flex items-center justify-between mb-2 pt-2 px-1">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">我的日記</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">記錄生活中的每一天</p>
+                <h1 className="text-[34px] font-bold text-gray-900 dark:text-white tracking-tight leading-tight">日記</h1>
+                <p className="text-[13px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-1 ml-0.5">
+                  {new Date().toLocaleDateString('zh-TW', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </p>
               </div>
               <button
                 onClick={() => navigateToView('settings')}
