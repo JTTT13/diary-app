@@ -209,9 +209,8 @@ export function DataManagement() {
         <textarea
           id="bulk-import-text"
           placeholder="今晚月色很美&#10;30/12/2023 20:25&#10;&#10;昨夜夢見了你&#10;31/12/2023 06:13"
-          /* [Vibe] 移除任何潛在的長度限制，讓用戶盡情貼上 */
-          maxLength={undefined}
           className="w-full h-48 p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm resize-none mb-3 text-gray-900 dark:text-white"
+          style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word', overflowWrap: 'break-word' }}
         />
         <button
           onClick={handleBulkImport}
