@@ -43,9 +43,9 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in">
-      {/* 背景遮罩 */}
-      <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      {/* 背景遮罩 - [Vibe] Remove backdrop-blur-sm for performance */}
+      <div
+        className="absolute inset-0 bg-black/60"
         onClick={onCancel}
       />
       

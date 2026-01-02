@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app'; // [Vibe] Import Capacitor
 
 export interface BottomSheetOption {
   value: string;
@@ -17,17 +18,29 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ isOpen, title, options, onSelect, onClose }: BottomSheetProps) {
-  // 防止背景滾動
+  // 防止背景滾動 + 攔截返回鍵
   useEffect(() => {
+    let backListener: any;
+
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      
+      // [Vibe] 當選單打開時，攔截返回鍵
+      const setupListener = async () => {
+        backListener = await CapacitorApp.addListener('backButton', () => {
+           onClose() // 關閉選單，而不是退出 App
+        })
+      }
+      setupListener()
     } else {
       document.body.style.overflow = '';
     }
+
     return () => {
       document.body.style.overflow = '';
+      if (backListener) backListener.remove() // [Vibe] 清除監聽
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -38,9 +51,9 @@ export function BottomSheet({ isOpen, title, options, onSelect, onClose }: Botto
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center animate-fade-in-fast">
-      {/* 背景遮罩 */}
+      {/* 背景遮罩 - [Vibe] Remove backdrop-blur-sm for performance */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 transition-opacity"
         onClick={onClose}
       />
       

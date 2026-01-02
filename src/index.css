@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* [Vibe] Mobile Scaling Optimization */
+:root {
+  /* 預設 16px，稍微縮小到 14px 讓手機上內容更密集精緻 */
+  font-size: 14px;
+}
+
+/* 在大螢幕 (電腦/平板) 還原回 16px */
+@media (min-width: 640px) {
+  :root {
+    font-size: 16px;
+  }
+}
+
+/* 針對超高解析度手機的微調 (Density Awareness) */
+@media (-webkit-min-device-pixel-ratio: 2.5) {
+  :root {
+    /* 如果覺得還太大，可以試試 13.5px，但不建議太小 */
+    font-size: 14px;
+  }
+}
+
 /* 自定義樣式增強 */
 /* 滾動條樣式優化 */
 ::-webkit-scrollbar {
@@ -576,4 +597,18 @@ button {
 
 .animate-fade-in-fast {
   animation: fade-in-fast 0.15s ease-out;
+}
+
+/* [Vibe] App-like behavior: 禁止全域文字選取，避免長按誤觸 */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none; /* 禁止 iOS 長按跳出選單 */
+}
+
+/* 允許輸入框和可編輯區域選取文字 */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
