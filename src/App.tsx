@@ -14,6 +14,7 @@ function App() {
   const [editingDiary, setEditingDiary] = useState<DiaryEntry | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [showTitle, setShowTitle] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +26,8 @@ function App() {
     const savedTheme = await dbService.getTheme();
     setTheme(savedTheme);
     applyTheme(savedTheme);
+    const savedShowTitle = await dbService.getShowTitle();
+    setShowTitle(savedShowTitle);
     setLoading(false);
   };
 
@@ -62,6 +65,12 @@ function App() {
     setTheme(newTheme);
     applyTheme(newTheme);
     await dbService.setTheme(newTheme);
+  };
+  
+  const toggleShowTitle = async () => {
+    const newValue = !showTitle;
+    setShowTitle(newValue);
+    await dbService.setShowTitle(newValue);
   };
 
   const renderContent = () => {
@@ -111,9 +120,9 @@ function App() {
           </div>
         );
       case 'editor':
-        return <DiaryEditor diary={editingDiary} onSave={handleSave} onCancel={handleCancel} />;
+        return <DiaryEditor diary={editingDiary} onSave={handleSave} onCancel={handleCancel} showTitle={showTitle} />;
       case 'settings':
-        return <Settings theme={theme} onToggleTheme={toggleTheme} onBack={() => setCurrentView('diary')} />;
+        return <Settings theme={theme} onToggleTheme={toggleTheme} showTitle={showTitle} onToggleShowTitle={toggleShowTitle} onBack={() => setCurrentView('diary')} />;
       default:
         return null;
     }

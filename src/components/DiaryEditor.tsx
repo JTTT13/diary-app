@@ -5,30 +5,21 @@ interface DiaryEditorProps {
   diary: DiaryEntry | null;
   onSave: () => void;
   onCancel: () => void;
+  showTitle: boolean;
 }
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved';
 
-export function DiaryEditor({ diary, onSave, onCancel }: DiaryEditorProps) {
+export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [wordCount, setWordCount] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [createdTime, setCreatedTime] = useState<Date>(new Date());
-  const [showTitle, setShowTitle] = useState(true);
   const saveTimeoutRef = useRef<number | null>(null);
   const currentDiaryIdRef = useRef<string | null>(null);
   const initialLoadRef = useRef(true);
-
-  useEffect(() => {
-    loadTitleSetting();
-  }, []);
-
-  const loadTitleSetting = async () => {
-    const setting = await dbService.getShowTitle();
-    setShowTitle(setting);
-  };
 
   useEffect(() => {
     if (diary) {

@@ -5,26 +5,12 @@ import { dbService } from '../lib/db';
 interface SettingsProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  showTitle: boolean;
+  onToggleShowTitle: () => void;
   onBack: () => void;
 }
 
-export function Settings({ theme, onToggleTheme, onBack }: SettingsProps) {
-  const [showTitle, setShowTitle] = useState(true);
-
-  useEffect(() => {
-    loadTitleSetting();
-  }, []);
-
-  const loadTitleSetting = async () => {
-    const setting = await dbService.getShowTitle();
-    setShowTitle(setting);
-  };
-
-  const handleToggleTitle = async () => {
-    const newValue = !showTitle;
-    setShowTitle(newValue);
-    await dbService.setShowTitle(newValue);
-  };
+export function Settings({ theme, onToggleTheme, showTitle, onToggleShowTitle, onBack }: SettingsProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-6">
@@ -95,7 +81,7 @@ export function Settings({ theme, onToggleTheme, onBack }: SettingsProps) {
               <div className="text-sm text-gray-500 dark:text-gray-400">編輯器顯示標題輸入框</div>
             </div>
             <button
-              onClick={handleToggleTitle}
+              onClick={onToggleShowTitle}
               className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 showTitle ? 'bg-blue-600' : 'bg-gray-200'
               }`}
