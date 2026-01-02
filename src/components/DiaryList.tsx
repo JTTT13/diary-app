@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
 import { BottomSheet, type BottomSheetOption } from './BottomSheet';
 
@@ -41,10 +41,33 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   const [searchTerm, setSearchTerm] = useState(() => sessionStorage.getItem('diary_search_term') || '');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [loading, setLoading] = useState(false);
-  const [sortType, setSortType] = useState<SortType>('date');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [filterType, setFilterType] = useState<FilterType>('all');
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  // [Vibe] Persistence: 從 localStorage 讀取排序設定
+  const [sortType, setSortType] = useState<SortType>(() => {
+    const saved = localStorage.getItem('diary_sort_type');
+    return (saved as SortType) || 'date';
+  });
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const saved = localStorage.getItem('diary_sort_order');
+    return (saved as SortOrder) || 'desc';
+  });
+  const [filterType, setFilterType] = useState<FilterType>(() => {
+    const saved = localStorage.getItem('diary_filter_type');
+    return (saved as FilterType) || 'all';
+  });
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(() => {
+    return localStorage.getItem('diary_selected_month');
+  });
+  
+  // [Vibe] UI: 返回頂部按鈕顯示狀態
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  // [Vibe] UX: 標記滾動位置是否已恢復，用於控制畫面淡入，避免跳動
+  const [isRestored, setIsRestored] = useState(false);
+
+  // [Vibe] Persistence: 記住滾動位置
+  const [scrollPosition, setScrollPosition] = useState(() => {
+    const saved = sessionStorage.getItem('diary_scroll_position');
+    return saved ? parseInt(saved) : 0;
+  });
   const [actionFeedback, setActionFeedback] = useState<string>('');
   
   /* [Vibe] 同步狀態給父層 App.tsx 以攔截返回鍵 */
@@ -72,6 +95,27 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   useEffect(() => {
     sessionStorage.setItem('diary_search_term', searchTerm)
   }, [searchTerm])
+
+  // [Vibe] Persistence: 保存排序和篩選設定
+  useEffect(() => {
+    localStorage.setItem('diary_sort_type', sortType);
+  }, [sortType]);
+
+  useEffect(() => {
+    localStorage.setItem('diary_sort_order', sortOrder);
+  }, [sortOrder]);
+
+  useEffect(() => {
+    localStorage.setItem('diary_filter_type', filterType);
+  }, [filterType]);
+
+  useEffect(() => {
+    if (selectedMonth) {
+      localStorage.setItem('diary_selected_month', selectedMonth);
+    } else {
+      localStorage.removeItem('diary_selected_month');
+    }
+  }, [selectedMonth]);
 
   // [Vibe] Pagination: 分頁狀態
   const PAGE_SIZE = 20
@@ -459,8 +503,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     });
   }, []);
 
-  // 排序選項
-  const sortOptions: BottomSheetOption[] = [
+  // [Vibe] 優化效能: 使用 useMemo 避免每次 render 都重新生成選項
+  const sortOptions: BottomSheetOption[] = useMemo(() => [
     {
       value: 'date-desc',
       label: '最新優先',
@@ -527,7 +571,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         </svg>
       )
     }
-  ];
+  ], [sortType, sortOrder]); // 只在排序狀態變化時重新計算
 
   // 提取所有有日記的年月
   const availableMonths = useMemo(() => {
@@ -641,6 +685,55 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, []);
 
+  // [Vibe] UX: 無縫滾動恢復 & 返回頂部監聽
+  // 使用 useLayoutEffect 確保在畫面渲染前就設定好 Scroll，避免閃爍
+  useLayoutEffect(() => {
+    // 1. 恢復滾動位置
+    const savedPosition = parseInt(sessionStorage.getItem('diary_scroll_position') || '0');
+    if (savedPosition > 0) {
+      window.scrollTo({ top: savedPosition, behavior: 'instant' });
+    }
+    
+    // 2. 設定為已恢復，觸發淡入動畫
+    // 使用 requestAnimationFrame 確保在下一幀才顯示，讓 Scroll 設定完全生效
+    requestAnimationFrame(() => {
+      setIsRestored(true);
+    });
+
+  }, []); // 只在 Mount 時執行一次
+
+  // [Vibe] Persistence & UI: 監聽滾動
+  useEffect(() => {
+    const handleScroll = () => {
+      const position = window.pageYOffset || document.documentElement.scrollTop;
+      
+      // 保存位置
+      sessionStorage.setItem('diary_scroll_position', position.toString());
+      setScrollPosition(position);
+
+      // 控制返回頂部按鈕 (超過 500px 顯示)
+      setShowBackToTop(position > 500);
+    };
+
+    let ticking = false;
+    const throttledScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          handleScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', throttledScroll, { passive: true });
+    return () => window.removeEventListener('scroll', throttledScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // 只有在真正需要等待資料且沒有任何日記時才顯示 loading
   if (loading && diaries.length === 0) {
     return (
@@ -656,7 +749,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     <div
       className="container mx-auto px-4 py-6 max-w-4xl page-transition-enter min-h-screen"
     >
-      <div>
+      {/* [Vibe] Animation: 添加 transition-opacity 實現 Apple 風格的無縫出現 */}
+      <div className={`transition-opacity duration-300 ease-out ${isRestored ? 'opacity-100' : 'opacity-0'}`}>
         {actionFeedback && (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white px-6 py-3 rounded-lg shadow-lg animate-slide-down">
             {actionFeedback}
@@ -996,7 +1090,20 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         onSelect={(val) => { handleFilterSelect(val); setActiveSheet(null); }}
         onClose={() => setActiveSheet(null)}
       />
-      </div> {/* Close the wrapper div */}
+
+      {/* [Vibe] UI: 返回頂部按鈕 (Floating Action Button) */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-24 right-6 p-3 rounded-full shadow-lg bg-blue-600 text-white z-40 transition-all duration-300 transform hover:bg-blue-700 active:scale-95 ${
+          showBackToTop ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+        }`}
+        aria-label="返回頂部"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+      </button>
+      </div> {/* Close the transition-opacity div */}
     </div>
   );
 }
