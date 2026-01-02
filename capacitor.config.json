@@ -1,0 +1,14 @@
+{
+  "appId": "com.example.diaryapp",
+  "appName": "diary-app",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
