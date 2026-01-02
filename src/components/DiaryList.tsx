@@ -272,12 +272,17 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
-    
-    if (!longPressActive.current && e) {
-      touchStartPos.current = null;
-    }
-    
+
+    // 清理所有狀態
+    touchStartPos.current = null;
+    const wasLongPress = longPressActive.current;
     longPressActive.current = false;
+
+    // 如果是長按觸發的,不執行點擊事件
+    if (wasLongPress && e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {

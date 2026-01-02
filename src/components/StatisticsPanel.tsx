@@ -164,8 +164,8 @@ export function StatisticsPanel({ refreshTrigger }: StatisticsPanelProps) {
             <span>高</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="inline-flex gap-1">
+          <div className="overflow-x-auto overflow-y-hidden -mx-4 px-4">
+            <div className="inline-flex gap-1 min-w-max">
               {/* 時間標籤 */}
               <div className="flex flex-col text-xs text-gray-500 dark:text-gray-400 pr-2">
                 <div className="h-6"></div>
