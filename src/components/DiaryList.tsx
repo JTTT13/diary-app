@@ -23,18 +23,20 @@ interface DiaryListProps {
   onEdit: (diary: DiaryEntry) => void;
   onNew: () => void;
   refreshTrigger: number;
+  cachedDiaries?: DiaryEntry[];
+  onDiariesChange?: (diaries: DiaryEntry[]) => void;
 }
 
 type SortType = 'date' | 'title' | 'wordCount';
 type SortOrder = 'asc' | 'desc';
 type FilterType = 'all' | 'starred' | 'archived' | `month-${string}`;
 
-export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
-  const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
+export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiariesChange }: DiaryListProps) {
+  const [diaries, setDiaries] = useState<DiaryEntry[]>(cachedDiaries || []);
   const [filteredDiaries, setFilteredDiaries] = useState<DiaryEntry[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // 默認不顯示 loading
   const [sortType, setSortType] = useState<SortType>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [filterType, setFilterType] = useState<FilterType>('all');
@@ -51,13 +53,21 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
 
+  // 使用緩存數據初始化
   useEffect(() => {
-    loadDiaries();
-  }, [refreshTrigger]);
+    if (cachedDiaries && cachedDiaries.length > 0) {
+      setDiaries(cachedDiaries);
+      setLoading(false);
+    } else {
+      // 如果沒有緩存數據，設置為空數組並關閉 loading
+      setDiaries([]);
+      setLoading(false);
+    }
+  }, [cachedDiaries]);
 
   useEffect(() => {
     filterAndSortDiaries();
-  }, [debouncedSearchTerm, diaries, sortType, sortOrder, filterType]);
+  }, [debouncedSearchTerm, diaries, sortType, sortOrder, filterType, selectedMonth]);
 
   useEffect(() => {
     if (actionFeedback) {
@@ -101,12 +111,16 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
       setLoading(true);
       const data = await dbService.getAllDiaries();
       setDiaries(data);
+      if (onDiariesChange) {
+        onDiariesChange(data);
+      }
     } catch (error) {
-      setActionFeedback('載入失敗，請重試');
+      console.error('載入日記失敗:', error);
+      setActionFeedback('載入失敗');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onDiariesChange]);
 
   const sortDiaries = useCallback((diariesToSort: DiaryEntry[]): DiaryEntry[] => {
     const sorted = [...diariesToSort];
@@ -487,6 +501,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
   const availableMonths = useMemo(() => {
     const monthSet = new Map<string, number>();
     diaries.forEach(diary => {
+      if (diary.isArchived) return; // 排除已封存的日記
       const date = new Date(diary.createdAt);
       const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       monthSet.set(yearMonth, (monthSet.get(yearMonth) || 0) + 1);
@@ -508,7 +523,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     {
       value: 'all',
       label: `全部日記 (${diaries.filter(d => !d.isArchived).length})`,
-      selected: filterType === 'all',
+      selected: filterType === 'all' && !selectedMonth,
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -557,7 +572,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger }: DiaryListProps) {
     if (value.startsWith('month-')) {
       const yearMonth = value.replace('month-', '');
       setSelectedMonth(yearMonth);
-      setFilterType('all'); // 年月篩選時設為 all，但用 selectedMonth 來過濾
+      setFilterType('all');
     } else {
       setSelectedMonth(null);
       setFilterType(value as FilterType);

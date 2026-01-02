@@ -574,32 +574,6 @@ button {
   }
 }
 
-@keyframes fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes slide-down {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(100%);
-  }
-}
-
 .animate-fade-in-fast {
   animation: fade-in-fast 0.15s ease-out;
-}
-
-.animate-fade-out {
-  animation: fade-out 0.2s ease-in;
-}
-
-.animate-slide-down {
-  animation: slide-down 0.25s cubic-bezier(0.4, 0, 1, 1);
 }

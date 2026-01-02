@@ -17,7 +17,8 @@ function App() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [showTitle, setShowTitle] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [isDbReady, setIsDbReady] = useState(false);
+  const [cachedDiaries, setCachedDiaries] = useState<DiaryEntry[]>([]);
   const [viewHistory, setViewHistory] = useState<ViewType[]>(['diary']);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -36,13 +37,27 @@ function App() {
   }, []);
 
   const initializeApp = async () => {
-    await dbService.init();
-    const savedTheme = await dbService.getTheme();
-    setTheme(savedTheme);
-    applyTheme(savedTheme);
-    const savedShowTitle = await dbService.getShowTitle();
-    setShowTitle(savedShowTitle);
-    setLoading(false);
+    try {
+      await dbService.init();
+      const savedTheme = await dbService.getTheme();
+      setTheme(savedTheme);
+      applyTheme(savedTheme);
+      const savedShowTitle = await dbService.getShowTitle();
+      setShowTitle(savedShowTitle);
+      // 預先加載日記數據
+      try {
+        const diaries = await dbService.getAllDiaries();
+        setCachedDiaries(diaries);
+      } catch (error) {
+        console.error('載入日記失敗:', error);
+        setCachedDiaries([]);
+      }
+      // 標記數據庫已就緒
+      setIsDbReady(true);
+    } catch (error) {
+      console.error('初始化失敗:', error);
+      setIsDbReady(true); // 即使失敗也設為 true，避免卡住
+    }
   };
 
   const applyTheme = (theme: 'light' | 'dark') => {
@@ -142,6 +157,9 @@ function App() {
   const handleSave = useCallback(async () => {
     goBack();
     setEditingDiary(null);
+    // 重新加載日記數據
+    const diaries = await dbService.getAllDiaries();
+    setCachedDiaries(diaries);
     setRefreshTrigger(prev => prev + 1);
   }, [goBack]);
 
@@ -184,7 +202,13 @@ function App() {
                 </svg>
               </button>
             </div>
-            <DiaryList onEdit={handleEditDiary} onNew={handleNewDiary} refreshTrigger={refreshTrigger} />
+            <DiaryList
+              onEdit={handleEditDiary}
+              onNew={handleNewDiary}
+              refreshTrigger={refreshTrigger}
+              cachedDiaries={cachedDiaries}
+              onDiariesChange={setCachedDiaries}
+            />
           </div>
         );
       case 'statistics':
@@ -206,7 +230,10 @@ function App() {
                 </svg>
               </button>
             </div>
-            <StatisticsPanel refreshTrigger={refreshTrigger} />
+            <StatisticsPanel
+              refreshTrigger={refreshTrigger}
+              cachedDiaries={cachedDiaries}
+            />
           </div>
         );
       case 'editor':
@@ -218,15 +245,9 @@ function App() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-500 dark:text-gray-400">載入中...</p>
-        </div>
-      </div>
-    );
+  // 等待數據庫初始化
+  if (!isDbReady) {
+    return null; // 或者返回一個空白頁面，避免白色 loading
   }
 
   return (

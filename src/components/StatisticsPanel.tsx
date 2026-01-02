@@ -3,16 +3,24 @@ import { dbService, type DiaryEntry } from '../lib/db';
 
 interface StatisticsPanelProps {
   refreshTrigger?: number;
+  cachedDiaries?: DiaryEntry[];
 }
 
-export function StatisticsPanel({ refreshTrigger }: StatisticsPanelProps) {
+export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPanelProps) {
   const [totalEntries, setTotalEntries] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
   const [monthlyCount, setMonthlyCount] = useState(0);
   const [avgWords, setAvgWords] = useState(0);
   const [lastEntryDate, setLastEntryDate] = useState<Date | null>(null);
   const [timeHeatmap, setTimeHeatmap] = useState<number[][]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  // 使用緩存數據初始化
+  useEffect(() => {
+    if (cachedDiaries && cachedDiaries.length > 0) {
+      loadStatistics();
+    }
+  }, [cachedDiaries]);
 
   useEffect(() => {
     loadStatistics();
@@ -20,7 +28,17 @@ export function StatisticsPanel({ refreshTrigger }: StatisticsPanelProps) {
 
   const loadStatistics = async () => {
     try {
-      const entries = await dbService.getAllDiaries();
+      // 優先使用緩存數據
+      let entries: DiaryEntry[] = cachedDiaries || [];
+      if (!cachedDiaries || cachedDiaries.length === 0) {
+        setLoading(true);
+        try {
+          entries = await dbService.getAllDiaries();
+        } catch (error) {
+          console.error('載入統計數據失敗:', error);
+          entries = [];
+        }
+      }
       
       setTotalEntries(entries.length);
       
@@ -48,7 +66,7 @@ export function StatisticsPanel({ refreshTrigger }: StatisticsPanelProps) {
       const heatmap = calculateTimeHeatmap(entries);
       setTimeHeatmap(heatmap);
     } catch (error) {
-      // 錯誤已被靜默處理，不會顯示 console
+      console.error('統計載入錯誤:', error);
     } finally {
       setLoading(false);
     }

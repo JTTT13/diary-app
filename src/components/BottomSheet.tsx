@@ -17,61 +17,35 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ isOpen, title, options, onSelect, onClose }: BottomSheetProps) {
-  const [isClosing, setIsClosing] = useState(false);
-  const [shouldRender, setShouldRender] = useState(isOpen);
-
   // 防止背景滾動
   useEffect(() => {
     if (isOpen) {
-      setShouldRender(true);
-      setIsClosing(false);
       document.body.style.overflow = 'hidden';
-    } else if (shouldRender) {
-      setIsClosing(true);
-      // 等待動畫完成後再卸載
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-        document.body.style.overflow = '';
-      }, 250); // 動畫時長
-      return () => clearTimeout(timer);
+    } else {
+      document.body.style.overflow = '';
     }
-  }, [isOpen, shouldRender]);
-
-  useEffect(() => {
     return () => {
       document.body.style.overflow = '';
     };
-  }, []);
+  }, [isOpen]);
 
-  if (!shouldRender) return null;
-
-  const handleClose = () => {
-    if (isClosing) return; // 防止重複觸發
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, 200);
-  };
+  if (!isOpen) return null;
 
   const handleSelect = (value: string) => {
-    if (isClosing) return; // 防止重複觸發
-    setIsClosing(true);
     onSelect(value);
-    setTimeout(() => {
-      onClose();
-    }, 200);
+    onClose();
   };
 
   return (
-    <div className={`fixed inset-0 z-[9999] flex items-end justify-center ${isClosing ? 'animate-fade-out' : 'animate-fade-in-fast'}`}>
+    <div className="fixed inset-0 z-[9999] flex items-end justify-center animate-fade-in-fast">
       {/* 背景遮罩 */}
       <div
-        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
-        onClick={handleClose}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
       />
       
       {/* 底部彈出選單 */}
-      <div className={`relative bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl w-full max-w-lg pb-safe ${isClosing ? 'animate-slide-down' : 'animate-slide-up'}`}>
+      <div className="relative bg-white dark:bg-gray-800 rounded-t-3xl shadow-2xl w-full max-w-lg pb-safe animate-slide-up">
         {/* 拖動指示器 */}
         <div className="flex justify-center pt-3 pb-2">
           <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
@@ -129,7 +103,7 @@ export function BottomSheet({ isOpen, title, options, onSelect, onClose }: Botto
         {/* 取消按鈕 */}
         <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium transition-all active:scale-98"
           >
             取消
