@@ -88,12 +88,18 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
   const { totalEntries, totalWords, avgWords, monthlyCount, lastEntryDate, timeHeatmap, currentStreak } = statistics;
 
   const getHeatmapColor = (count: number, maxCount: number): string => {
-    if (count === 0) return 'bg-gray-100 dark:bg-gray-800';
+    // 空值改用更明顯的灰色實色，確保在白色背景上能看見格子
+    if (count === 0) return 'bg-gray-100 dark:bg-gray-700/50';
     const intensity = maxCount > 0 ? count / maxCount : 0;
-    if (intensity <= 0.25) return 'bg-blue-200 dark:bg-blue-900/40';
-    if (intensity <= 0.5) return 'bg-blue-300 dark:bg-blue-800/60';
-    if (intensity <= 0.75) return 'bg-blue-400 dark:bg-blue-700/80';
-    return 'bg-blue-500 dark:bg-blue-600';
+    
+    // 7 層粉色深度，調整透明度讓層次更分明
+    if (intensity <= 0.15) return 'bg-pink-200 dark:bg-pink-900/40';
+    if (intensity <= 0.3) return 'bg-pink-300 dark:bg-pink-800/50';
+    if (intensity <= 0.45) return 'bg-pink-400 dark:bg-pink-700/60';
+    if (intensity <= 0.6) return 'bg-pink-500 dark:bg-pink-600/70';
+    if (intensity <= 0.75) return 'bg-pink-600 dark:bg-pink-500/80';
+    if (intensity <= 0.9) return 'bg-pink-700 dark:bg-pink-400/90';
+    return 'bg-pink-800 dark:bg-pink-300';
   };
 
   const formatDateTime = (date: Date): string => {
@@ -111,6 +117,9 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
 
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
   const maxCount = Math.max(...timeHeatmap.flat());
+  
+  // 生成從 06:00 開始的 24 小時順序 (06:00 在頂部, 05:00 在底部)
+  const hourOrder = Array.from({ length: 24 }, (_, i) => (6 + i) % 24);
 
   return (
     <div className="space-y-6">
@@ -120,20 +129,20 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
         style={{ animationDelay: '0s' }}
       >
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-white/80 text-sm font-medium mb-1">連續寫作</p>
-            <h3 className="text-3xl font-bold flex items-baseline gap-2">
-              {currentStreak}
-              <span className="text-lg font-normal opacity-80">天</span>
-            </h3>
-          </div>
-          <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
-             <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" aria-hidden="true">
-               <path d="M12 2c.9 3.4-.9 5.3-2.5 7-1.3 1.4-2.5 2.7-2.5 4.9a5 5 0 0010 0c0-2.2-1.2-3.5-2.5-4.9-1.6-1.7-3.4-3.6-2.5-7z" />
-               <path d="M12 10.2c.35 1.5-.5 2.3-1.2 3-.6.6-1.1 1.1-1.1 1.9a2.3 2.3 0 004.6 0c0-.8-.5-1.3-1.1-1.9-.7-.7-1.55-1.5-1.2-3z" opacity="0.7" />
-             </svg>
-           </div>
+        <div>
+          <p className="text-white/80 text-sm font-medium mb-1">連續寫作</p>
+          <h3 className="text-3xl font-bold flex items-baseline gap-2">
+            {currentStreak}
+            <span className="text-lg font-normal opacity-80">天</span>
+          </h3>
         </div>
+        <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+           {/* 標準實心火焰圖示 */}
+           <svg className="w-8 h-8 text-orange-500 dark:text-orange-400 drop-shadow-sm" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+             <path fillRule="evenodd" d="M12.9 14.32a8 8 0 0 1 1.76 4.5c0 1.4-.44 2.72-1.2 3.8.72-.25 1.4-.64 1.96-1.13 1.94-1.7 2.45-4.5 1.1-7.17M13.63 2c-.93 2.1-1.3 4.56.36 6.84-2.83-2-4-4.83-3.6-7.38C6.18 3.5 4.64 6.95 5.92 10.3c.96 2.5 3.32 4.3 5.38 4.02L12 14l.7 1.25.1.25-.1.24c-.62 1.54-2.14 2.56-3.8 2.54-1.92 0-3.6-1.37-4.1-3.2-.2-1-.07-2 .3-2.93l.26-.64-.5-.53c-1.3-1.36-2-3.14-1.93-5A11.3 11.3 0 0 1 5.06 0C1.86 4.6 1.46 10.95 4.14 16A9.96 9.96 0 0 0 13 22a10 10 0 0 0 7.07-2.93c4.1-4.1 3.9-10.93-.45-14.8-.82-.74-1.8-1.4-2.8-1.84l-.86-.33.15.9c.14.78.22 1.58.23 2.38-.02 1.34-.33 2.66-.9 3.85l-.4 1.13-.88-.7c-2.15-1.7-2.6-4.63-1.07-6.93l.46-.73L13.63 2Z" clipRule="evenodd" />
+           </svg>
+         </div>
+      </div>
       </div>
 
       {/* 統計卡片 */}
@@ -178,67 +187,72 @@ export function StatisticsPanel({ refreshTrigger, cachedDiaries }: StatisticsPan
         </div>
       )}
 
-      {/* 時間熱力圖 */}
+      {/* 寫作習慣熱圖 - 手機寬度適配版 */}
       {totalEntries > 0 && (
-        <div className="stagger-item card-hover bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700" style={{ animationDelay: '0.2s' }}>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            寫作時間分析
-          </h3>
-          
-          <div className="flex items-center gap-2 mb-4 text-sm text-gray-500 dark:text-gray-400">
-            <span>頻率</span>
-            <div className="flex gap-1">
-              <div className="w-3 h-3 rounded bg-gray-100 dark:bg-gray-800"></div>
-              <div className="w-3 h-3 rounded bg-blue-200 dark:bg-blue-900/40"></div>
-              <div className="w-3 h-3 rounded bg-blue-300 dark:bg-blue-800/60"></div>
-              <div className="w-3 h-3 rounded bg-blue-400 dark:bg-blue-700/80"></div>
-              <div className="w-3 h-3 rounded bg-blue-500 dark:bg-blue-600"></div>
+        <div className="stagger-item card-hover bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700" style={{ animationDelay: '0.2s' }}>
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg">
+              <svg className="w-5 h-5 text-pink-600 dark:text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
-            <span>高</span>
+            <h3 className="font-bold text-gray-900 dark:text-white">寫作時間分佈</h3>
           </div>
 
-          <div className="overflow-x-auto overflow-y-hidden -mx-4 px-4">
-            <div className="inline-flex gap-1 min-w-max">
-              {/* 時間標籤 */}
-              <div className="flex flex-col text-xs text-gray-500 dark:text-gray-400 pr-2">
-                <div className="h-6"></div>
-                {Array.from({ length: 24 }, (_, i) => (
-                  <div key={i} className="h-4 flex items-center justify-end">
-                    {i % 3 === 0 ? `${String(i).padStart(2, '0')}:00` : ''}
+          <div className="flex w-full">
+            {/* 左側時間軸標籤 - 每3小時顯示 (對齊格子高度) */}
+            <div className="flex flex-col pt-6 pb-0 pr-2 text-[10px] text-gray-400 dark:text-gray-500 font-medium w-10 flex-shrink-0 text-right gap-1">
+              {hourOrder.map((hour, i) => (
+                <div key={hour} className="h-3 sm:h-4 flex items-center justify-end">
+                  {/* 每 3 小時顯示一次標籤 (06, 09, 12...) */}
+                  {hour % 3 === 0 ? `${String(hour).padStart(2, '0')}:00` : ''}
+                </div>
+              ))}
+            </div>
+
+            {/* 熱圖主體 - 使用 flex-1 和 grid 確保填滿寬度 */}
+            <div className="flex-1 min-w-0">
+              {/* 頂部星期標籤 (週一至週日) */}
+              <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+                {['一', '二', '三', '四', '五', '六', '日'].map((d) => (
+                  <div key={d} className="text-xs text-gray-400 dark:text-gray-500 font-medium">
+                    {d}
                   </div>
                 ))}
               </div>
 
-              {/* 熱力圖 */}
-              {weekDays.map((day, dayIndex) => (
-                <div key={dayIndex} className="flex flex-col items-center">
-                  <div className="h-6 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{day}</div>
-                  {timeHeatmap.map((hourData, hourIndex) => {
-                    const count = hourData[dayIndex];
-                    return (
-                      <div
-                        key={hourIndex}
-                        className={`w-6 h-4 rounded-sm ${getHeatmapColor(count, maxCount)} transition-all hover:scale-110 hover:shadow-md cursor-pointer relative group`}
-                        title={`${day} ${String(hourIndex).padStart(2, '0')}:00 - ${count}篇`}
-                      >
-                        {count > 0 && (
-                          <div className="absolute hidden group-hover:block bg-gray-900 dark:bg-gray-700 text-white text-xs px-2 py-1 rounded -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-10">
-                            {count}篇
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              {/* 格子區域 */}
+              <div className="flex flex-col gap-1 w-full">
+                {hourOrder.map((hour) => (
+                  <div key={hour} className="grid grid-cols-7 gap-1 w-full h-3 sm:h-4">
+                    {/* 映射週一(1)到週日(0)的順序 */}
+                    {[1, 2, 3, 4, 5, 6, 0].map((dayIndex) => {
+                      const count = timeHeatmap[hour][dayIndex];
+                      return (
+                        <div
+                          key={`${hour}-${dayIndex}`}
+                          className={`rounded-sm ${getHeatmapColor(count, maxCount)} transition-all hover:opacity-80`}
+                          title={`週${['日','一','二','三','四','五','六'][dayIndex]} ${String(hour).padStart(2, '0')}:00 - ${count} 篇`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-
-          <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">
-            每個方格代表該時段寫日記的次數
+          
+          {/* 圖例說明 (粉色系) */}
+          <div className="flex items-center justify-end gap-2 mt-4 text-xs text-gray-400">
+            <span>少</span>
+            <div className="flex gap-1">
+              <div className="w-3 h-3 rounded-sm bg-gray-100 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-700"></div>
+              <div className="w-3 h-3 rounded-sm bg-pink-200 dark:bg-pink-900/40"></div>
+              <div className="w-3 h-3 rounded-sm bg-pink-400 dark:bg-pink-700/60"></div>
+              <div className="w-3 h-3 rounded-sm bg-pink-600 dark:bg-pink-500/80"></div>
+              <div className="w-3 h-3 rounded-sm bg-pink-800 dark:bg-pink-300"></div>
+            </div>
+            <span>多</span>
           </div>
         </div>
       )}
