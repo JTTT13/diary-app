@@ -1,3 +1,6 @@
+import { type ClassValue, clsx } from "clsx"
+import { calculateWordCount } from "./utils"
+
 export interface DiaryEntry {
   id: string;
   title: string;

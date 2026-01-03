@@ -43,7 +43,6 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
   }, [diary]);
 
   useEffect(() => {
-    // 避免初始加載時觸發自動儲存
     if (initialLoadRef.current) {
       initialLoadRef.current = false;
       return;
@@ -53,11 +52,17 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
       clearTimeout(saveTimeoutRef.current);
     }
 
+    // Only trigger save if there is content
     if (title.trim() || content.trim()) {
+      // Visually indicate change immediately
       setSaveStatus('saving');
+      
       saveTimeoutRef.current = window.setTimeout(async () => {
         await autoSave();
       }, 500);
+    } else {
+       // Handle case where user clears everything (optional, but good for state consistency)
+       setSaveStatus('unsaved');
     }
 
     return () => {
@@ -130,15 +135,27 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
         currentDiaryIdRef.current = newDiaryId;
       }
 
+      // Ensure we set status to saved ONLY after await completes
       setSaveStatus('saved');
     } catch (error) {
+      console.error("Auto-save failed:", error);
       setSaveStatus('unsaved');
     }
   }, [title, content, diary]);
 
-  const handleComplete = useCallback(() => {
-    onSave();
-  }, [onSave]);
+  const handleComplete = useCallback(async () => {
+    // Force immediate save when clicking 'Done', clearing any pending auto-save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    
+    // Explicitly call autoSave to ensure latest content is persisted
+    // Use 'await' to ensure DB operation finishes before closing
+    await autoSave();
+    
+    onSave(); // This will trigger the parent's refresh logic
+  }, [onSave, autoSave]);
 
   const getSaveStatusText = useCallback(() => {
     switch (saveStatus) {

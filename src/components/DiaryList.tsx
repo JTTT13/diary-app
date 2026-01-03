@@ -117,16 +117,29 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, [selectedMonth]);
 
-  // [Vibe] Pagination: 分頁狀態
-  const PAGE_SIZE = 20
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  // Vibe Pagination
+  const PAGESIZE = 20
+  
+  // Generate a unique key based on current view state
+  const getStorageKey = (prefix: string, filter: string, sort: string, order: string, month: string | null, search: string) => {
+    const parts = [prefix, filter, sort, order]
+    if (month) parts.push(month)
+    if (search) parts.push(search)
+    return parts.join("_")
+  }
+  
+  // Initial state must derive from props/state directly is tricky in useState initializer
+  // because we need access to the state variables which aren't initialized yet.
+  // Instead, we initialize with PAGESIZE and use a layout effect to restore immediately.
+  const [visibleCount, setVisibleCount] = useState(PAGESIZE)
   // Use callback-ref to ensure observer attaches only when element exists
   const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null)
-
-  // [Vibe] Pagination: 搜尋或篩選條件改變時，重置回第一頁
+  
+  // [Vibe] Persistence: 儲存 visibleCount 到對應的 key
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [debouncedSearchTerm, filterType, sortType, sortOrder, selectedMonth])
+    const countKey = getStorageKey("count", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
+    sessionStorage.setItem(countKey, visibleCount.toString())
+  }, [visibleCount, filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm])
 
   // [Vibe] Pagination: 監聽底部元素，觸發加載更多
   useEffect(() => {
@@ -135,7 +148,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount(prev => prev + PAGE_SIZE)
+          setVisibleCount(prev => prev + PAGESIZE)
         }
       },
       { threshold: 0.5 } // 看到 50% 就加載
@@ -683,30 +696,89 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     }
   }, []);
 
-  // [Vibe] UX: 無縫滾動恢復 & 返回頂部監聽
-  // 使用 useLayoutEffect 確保在畫面渲染前就設定好 Scroll，避免閃爍
+  // Vibe UX useLayoutEffect Scroll & Pagination Restore
+  const restoreAttemptsRef = useRef<number>(0)
+  const isRestoringRef = useRef<boolean>(false)
+
+  // 1. When View State Changes -> Load saved config for THIS state
   useLayoutEffect(() => {
-    // 1. 恢復滾動位置
-    const savedPosition = parseInt(sessionStorage.getItem('diary_scroll_position') || '0');
-    if (savedPosition > 0) {
-      window.scrollTo({ top: savedPosition, behavior: 'instant' });
+    const scrollKey = getStorageKey("scroll", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
+    const countKey = getStorageKey("count", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
+    
+    const savedCount = parseInt(sessionStorage.getItem(countKey) || "0", 10)
+    const savedScroll = parseInt(sessionStorage.getItem(scrollKey) || "0", 10)
+
+    // Restore visible count first
+    if (savedCount > PAGESIZE) {
+      setVisibleCount(savedCount)
+    } else {
+      setVisibleCount(PAGESIZE)
+    }
+
+    // Mark that we want to scroll to this position once data is ready
+    if (savedScroll > 0) {
+      isRestoringRef.current = true
+      restoreAttemptsRef.current = 0 as any
+      // Store target in a ref to be accessed in the next effect
+      (window as any).__targetScroll = savedScroll
+    } else {
+       isRestoringRef.current = false
+       window.scrollTo({ top: 0, behavior: "instant" })
     }
     
-    // 2. 設定為已恢復，觸發淡入動畫
-    // 使用 requestAnimationFrame 確保在下一幀才顯示，讓 Scroll 設定完全生效
+    // Also need to update the restoreAttemptsRef when count changes
+    restoreAttemptsRef.current = 0
+    
+    // 設定為已恢復，觸發淡入動畫
     requestAnimationFrame(() => {
       setIsRestored(true);
     });
+  }, [filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm])
 
-  }, []); // 只在 Mount 時執行一次
+  // 2. Perform the Scroll when DOM is ready
+  useLayoutEffect(() => {
+    if (!isRestoringRef.current) return
 
-  // [Vibe] Persistence & UI: 監聽滾動
+    const targetScroll = (window as any).__targetScroll || 0
+    if (targetScroll === 0) return
+
+    // Wait for data
+    if (filteredDiaries.length === 0) return
+
+    const currentHeight = document.documentElement.scrollHeight
+    const neededHeight = targetScroll + window.innerHeight
+
+    // If DOM too short but we have more items to show, force expansion
+    // (This handles cases where savedCount wasn't enough due to dynamic row heights)
+    if (currentHeight < neededHeight && visibleCount < filteredDiaries.length && restoreAttemptsRef.current < 10) {
+      restoreAttemptsRef.current = (restoreAttemptsRef.current + 1) as any
+      setVisibleCount(prev => Math.min(prev + PAGESIZE, filteredDiaries.length))
+      return
+    }
+
+    // Execute Scroll
+    window.scrollTo({ top: targetScroll, behavior: "instant" })
+    
+    // Double check in next frame
+    requestAnimationFrame(() => {
+       if (Math.abs(window.scrollY - targetScroll) > 50 && restoreAttemptsRef.current < 10) {
+          // Retry if failed
+          restoreAttemptsRef.current = (restoreAttemptsRef.current + 1) as any
+          return
+       }
+       isRestoringRef.current = false // Done
+    })
+
+  }, [visibleCount, filteredDiaries.length])
+
+  // [Vibe] Persistence & UI: 監聽滾動 (使用新的 key 生成邏輯)
   useEffect(() => {
     const handleScroll = () => {
       const position = window.pageYOffset || document.documentElement.scrollTop;
       
-      // 保存位置
-      sessionStorage.setItem('diary_scroll_position', position.toString());
+      // 保存位置 - 使用狀態指紋 key
+      const scrollKey = getStorageKey("scroll", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
+      sessionStorage.setItem(scrollKey, position.toString());
       setScrollPosition(position);
 
       // 控制返回頂部按鈕 (超過 500px 顯示)
@@ -726,7 +798,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
     window.addEventListener('scroll', throttledScroll, { passive: true });
     return () => window.removeEventListener('scroll', throttledScroll);
-  }, []);
+  }, [filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
