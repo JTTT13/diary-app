@@ -1,23 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
-
-// Helper: Unify word count logic for both UI display and save logic
-const calculateWordCount = (content: string) => {
-  const cleanText = content.replace(/<[^>]*>/g, '').trim()
-  if (!cleanText) return 0
-  let totalCount = 0
-  // CJK characters
-  const cjkChars = cleanText.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]/g)
-  if (cjkChars) totalCount += cjkChars.length
-  // Non-CJK (English/Numbers)
-  const nonCjkContent = cleanText.replace(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]/g, ' ')
-  const englishWords = nonCjkContent
-    .replace(/[^\w\s]/g, '')
-    .split(/\s+/)
-    .filter((word) => word.length > 0 && /[a-zA-Z0-9]/.test(word))
-  if (englishWords) totalCount += englishWords.length
-  return totalCount
-}
+import { calculateWordCount } from '../lib/utils';
 
 interface DiaryEditorProps {
   diary: DiaryEntry | null;
@@ -106,40 +89,37 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
         // 編輯現有日記，記錄編輯歷史
         const existingDiary = diary;
         const changes: string[] = [];
-        let isWordCountChanged = false;
         
-        if (existingDiary) {
-          if (existingDiary.content !== contentToSave) {
-            // Vibe: Only mark as edited if WORD COUNT changes
-            const oldWordCount = calculateWordCount(existingDiary.content)
-            const newWordCount = calculateWordCount(contentToSave)
-            isWordCountChanged = oldWordCount !== newWordCount
+        if (existingDiary && existingDiary.content !== contentToSave) {
+          const oldWordCount = calculateWordCount(existingDiary.content)
+          const newWordCount = calculateWordCount(contentToSave)
+          const isWordCountChanged = oldWordCount !== newWordCount
 
-            // Maintain legacy character diff history for statistics, but decouple from isEdited
-            const oldLength = existingDiary.content.length;
-            const newLength = contentToSave.length;
-            const diff = newLength - oldLength;
-            if (diff > 0) {
-              changes.push(`新增 ${diff} 字`);
-            } else if (diff < 0) {
-              changes.push(`刪除 ${Math.abs(diff)} 字`);
-            }
+          // Only record history if word count actually changed
+          if (isWordCountChanged) {
+            const diff = newWordCount - oldWordCount
+            changes.push(diff > 0 ? `+${diff}` : `${diff}`)
           }
+
+          const newEditHistory = changes.length > 0
+              ? [...(existingDiary.editHistory || []), { timestamp: now, changes: changes.join(', ') }]
+              : existingDiary.editHistory
 
           await dbService.updateDiary(currentDiaryIdRef.current, {
             title: title.trim(),
             content: contentToSave,
             updatedAt: now,
-            // Only flip to true if it wasn't edited before AND word count changed
-            isEdited: existingDiary.isEdited || isWordCountChanged,
-            editHistory: changes.length > 0 ? [
-              ...(existingDiary?.editHistory || []),
-              {
-                timestamp: now,
-                changes: changes.join('、')
-              }
-            ] : existingDiary?.editHistory || []
-          });
+            // isEdited is strictly true only if we have edit history (which implies word count changed)
+            isEdited: (newEditHistory && newEditHistory.length > 0) || false,
+            editHistory: newEditHistory
+          })
+        } else if (existingDiary) {
+          // Content didn't change, but maybe title did
+          await dbService.updateDiary(currentDiaryIdRef.current, {
+            title: title.trim(),
+            content: contentToSave,
+            updatedAt: now,
+          })
         }
       } else {
         // 創建新日記

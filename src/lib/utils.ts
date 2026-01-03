@@ -58,19 +58,29 @@ export function formatRelativeTime(date: Date): string {
 
 // 計算字數 (提取共用邏輯)
 export function calculateWordCount(text: string): number {
+  // Remove HTML tags and &nbsp;
   const cleanText = text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
   if (!cleanText) return 0;
 
   let totalCount = 0;
-  const cjkChars = cleanText.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
-  totalCount += cjkChars ? cjkChars.length : 0;
 
-  const nonCjkContent = cleanText.replace(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g, ' ');
+  // 1. CJK Characters & Punctuation (Including all full-width symbols)
+  // \u3000-\u303F: CJK Symbols and Punctuation (。、)
+  // \u4E00-\u9FFF: CJK Unified Ideographs (Common Kanji/Hanzi)
+  // \uFF00-\uFFEF: Halfwidth and Fullwidth Forms (Full-width commas, etc.)
+  const cjkAndSymbols = cleanText.match(/[\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u3040-\u309F\u30A0-\u30FF]/g);
+  if (cjkAndSymbols) totalCount += cjkAndSymbols.length;
+
+  // 2. Remove CJK characters to isolate English/Numbers
+  const nonCjkContent = cleanText.replace(/[\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u3040-\u309F\u30A0-\u30FF]/g, ' ');
+  
+  // 3. Count English words (Standard splitting by whitespace)
   const englishWords = nonCjkContent
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .filter(word => word.length > 0 && /[a-zA-Z0-9]/.test(word));
-  totalCount += englishWords.length;
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0) // Count everything else as words if separated by space
+
+  if (englishWords) totalCount += englishWords.length;
 
   return totalCount;
 }

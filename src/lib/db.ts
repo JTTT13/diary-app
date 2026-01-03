@@ -233,7 +233,7 @@ export class DiaryDBService {
 
   async createDiary(diary: Omit<DiaryEntry, 'id' | 'createdAt' | 'updatedAt' | 'wordCount' | 'isStarred' | 'isArchived' | 'isEdited' | 'editHistory'> & { createdAt?: Date }): Promise<string> {
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const wordCount = this.calculateWordCount(diary.content);
+    const wordCount = calculateWordCount(diary.content);
     const now = diary.createdAt || new Date();
     const entry: DiaryEntry = {
       ...diary,
@@ -266,24 +266,14 @@ export class DiaryDBService {
     if (!existing) return;
 
     const newWordCount = updates.content
-      ? this.calculateWordCount(updates.content)
+      ? calculateWordCount(updates.content)
       : existing.wordCount;
-
-    const hasContentChange = updates.content !== undefined && updates.content !== existing.content;
-    const hasTitleChange = updates.title !== undefined && updates.title !== existing.title;
-    const hasActualChange = hasContentChange || hasTitleChange;
-
-    const newEditHistory = updates.editHistory !== undefined 
-      ? updates.editHistory 
-      : existing.editHistory || [];
 
     const updated: DiaryEntry = {
       ...existing,
       ...updates,
       updatedAt: new Date(),
       wordCount: newWordCount,
-      isEdited: updates.isEdited !== undefined ? updates.isEdited : (existing.isEdited || hasActualChange),
-      editHistory: newEditHistory,
     };
 
     await this.dbOperation('diary', 'readwrite', async (tx) => {
@@ -315,23 +305,6 @@ export class DiaryDBService {
     });
   }
 
-  private calculateWordCount(content: string): number {
-    const cleanContent = content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-    if (!cleanContent) return 0;
-
-    let totalCount = 0;
-    const cjkChars = cleanContent.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
-    totalCount += cjkChars ? cjkChars.length : 0;
-
-    const nonCjkContent = cleanContent.replace(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g, ' ');
-    const englishWords = nonCjkContent
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 0 && /[a-zA-Z0-9]/.test(word));
-    
-    totalCount += englishWords.length;
-    return totalCount;
-  }
 
   async getTheme(): Promise<'light' | 'dark'> {
     const settings = await this.getSettings();

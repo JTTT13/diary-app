@@ -1011,7 +1011,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                         <div className="flex items-center gap-2 flex-wrap text-sm text-gray-500 dark:text-gray-400">
                           <span>{formatDateTime(diary.createdAt)}</span>
                           
-                          {diary.isEdited && (
+                          {diary.isEdited && diary.editHistory && diary.editHistory.length > 0 && (
                             <>
                               <span>•</span>
                               <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -177,12 +177,13 @@ function App() {
   }, [goBack]);
 
   const handleCancel = useCallback(async () => {
-    goBack();
-    setEditingDiary(null);
-    // 刷新快取
+    // Always refresh when leaving editor to sync word counts and auto-saves
     const diaries = await dbService.getAllDiaries();
     setCachedDiaries(diaries);
     setRefreshTrigger(prev => prev + 1);
+    
+    setEditingDiary(null);
+    goBack();
   }, [goBack]);
 
   const toggleTheme = useCallback(async () => {
