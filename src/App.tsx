@@ -175,9 +175,13 @@ function App() {
     setRefreshTrigger(prev => prev + 1);
   }, [goBack]);
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback(async () => {
     goBack();
     setEditingDiary(null);
+    // 刷新快取
+    const diaries = await dbService.getAllDiaries();
+    setCachedDiaries(diaries);
+    setRefreshTrigger(prev => prev + 1);
   }, [goBack]);
 
   const toggleTheme = useCallback(async () => {

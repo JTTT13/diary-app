@@ -144,6 +144,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
     return () => observer.disconnect()
   }, [observerTarget])
+
   
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -161,18 +162,6 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     return tmp.textContent || tmp.innerText || '';
   }, []);
 
-  // 使用緩存數據初始化
-  useEffect(() => {
-    if (cachedDiaries && cachedDiaries.length > 0) {
-      setDiaries(cachedDiaries);
-      setLoading(false);
-    } else if (cachedDiaries && cachedDiaries.length === 0) {
-      setDiaries([]);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-  }, [cachedDiaries]);
 
   // 移除舊的 filterAndSortDiaries useEffect
 
@@ -212,9 +201,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   const loadDiaries = useCallback(async () => {
     try {
-      if (diaries.length === 0) {
-        setLoading(true);
-      }
+      setLoading(true);
       const data = await dbService.getAllDiaries();
       setDiaries(data);
       if (onDiariesChange) {
@@ -226,7 +213,18 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     } finally {
       setLoading(false);
     }
-  }, [onDiariesChange, diaries.length]);
+  }, [onDiariesChange]);
+
+  // 使用緩存數據初始化 - 修復初次載入滾動bug
+  useEffect(() => {
+    if (cachedDiaries && cachedDiaries.length > 0) {
+      setDiaries(cachedDiaries);
+      setLoading(false); // 確保載入狀態正確
+    } else if (!cachedDiaries) {
+      // 只有當 cachedDiaries 為 undefined 時才載入
+      loadDiaries();
+    }
+  }, [cachedDiaries, loadDiaries]);
 
   // 將排序邏輯改為普通函數供 useMemo 使用，或直接在 useMemo 內部實現
   // 這裡我們直接在 filteredDiaries 的 useMemo 中處理，減少複雜度
@@ -986,7 +984,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                          onDiariesChange(cachedDiaries.map(d => d.id === diary.id ? {...d, isStarred: newStatus} : d));
                        }
                      }}
-                     className="absolute top-4 right-4 p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-90 transition-all z-10 group/star"
+                     className="absolute top-4 right-4 p-2 active:scale-90 transition-all z-10 group/star"
                    >
                      <svg
                        className={`w-6 h-6 transition-all duration-300 ${
@@ -1000,7 +998,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                      </svg>
                    </button>
                    )}
- 
+  
                    <div className="flex items-center justify-between gap-3 mb-3">
                      <div className="flex-1 min-w-0">
                        {hasTitle && (
@@ -1016,12 +1014,9 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                           {diary.isEdited && (
                             <>
                               <span>•</span>
-                              <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                已編輯
-                              </span>
+                              <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
                             </>
                           )}
                           
