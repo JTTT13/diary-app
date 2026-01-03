@@ -15,7 +15,8 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('diary');
   const [editingDiary, setEditingDiary] = useState<DiaryEntry | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Default to dark to match index.html and avoid flash
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [showTitle, setShowTitle] = useState(true);
   const [showOnThisDay, setShowOnThisDay] = useState(true);
   const [isDbReady, setIsDbReady] = useState(false);

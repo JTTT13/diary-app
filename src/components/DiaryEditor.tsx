@@ -1,6 +1,24 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { dbService, type DiaryEntry } from '../lib/db';
 
+// Helper: Unify word count logic for both UI display and save logic
+const calculateWordCount = (content: string) => {
+  const cleanText = content.replace(/<[^>]*>/g, '').trim()
+  if (!cleanText) return 0
+  let totalCount = 0
+  // CJK characters
+  const cjkChars = cleanText.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]/g)
+  if (cjkChars) totalCount += cjkChars.length
+  // Non-CJK (English/Numbers)
+  const nonCjkContent = cleanText.replace(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]/g, ' ')
+  const englishWords = nonCjkContent
+    .replace(/[^\w\s]/g, '')
+    .split(/\s+/)
+    .filter((word) => word.length > 0 && /[a-zA-Z0-9]/.test(word))
+  if (englishWords) totalCount += englishWords.length
+  return totalCount
+}
+
 interface DiaryEditorProps {
   diary: DiaryEntry | null;
   onSave: () => void;
@@ -67,21 +85,7 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
   }, [title, content]);
 
   const calculatedWordCount = useMemo(() => {
-    const cleanText = content.replace(/<[^>]*>/g, '').trim();
-    if (!cleanText) return 0;
-
-    let totalCount = 0;
-    const cjkChars = cleanText.match(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g);
-    totalCount += cjkChars ? cjkChars.length : 0;
-
-    const nonCjkContent = cleanText.replace(/[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g, ' ');
-    const englishWords = nonCjkContent
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 0 && /[a-zA-Z0-9]/.test(word));
-    
-    totalCount += englishWords.length;
-    return totalCount;
+    return calculateWordCount(content)
   }, [content]);
 
   useEffect(() => {
@@ -102,8 +106,16 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
         // 編輯現有日記，記錄編輯歷史
         const existingDiary = diary;
         const changes: string[] = [];
+        let isWordCountChanged = false;
+        
         if (existingDiary) {
           if (existingDiary.content !== contentToSave) {
+            // Vibe: Only mark as edited if WORD COUNT changes
+            const oldWordCount = calculateWordCount(existingDiary.content)
+            const newWordCount = calculateWordCount(contentToSave)
+            isWordCountChanged = oldWordCount !== newWordCount
+
+            // Maintain legacy character diff history for statistics, but decouple from isEdited
             const oldLength = existingDiary.content.length;
             const newLength = contentToSave.length;
             const diff = newLength - oldLength;
@@ -112,23 +124,23 @@ export function DiaryEditor({ diary, onSave, onCancel, showTitle }: DiaryEditorP
             } else if (diff < 0) {
               changes.push(`刪除 ${Math.abs(diff)} 字`);
             }
-            // 不記錄無字數變化的編輯
           }
-        }
 
-        await dbService.updateDiary(currentDiaryIdRef.current, {
-          title: title.trim(),
-          content: contentToSave,
-          updatedAt: now,
-          isEdited: true,
-          editHistory: changes.length > 0 ? [
-            ...(existingDiary?.editHistory || []),
-            {
-              timestamp: now,
-              changes: changes.join('、')
-            }
-          ] : existingDiary?.editHistory || []
-        });
+          await dbService.updateDiary(currentDiaryIdRef.current, {
+            title: title.trim(),
+            content: contentToSave,
+            updatedAt: now,
+            // Only flip to true if it wasn't edited before AND word count changed
+            isEdited: existingDiary.isEdited || isWordCountChanged,
+            editHistory: changes.length > 0 ? [
+              ...(existingDiary?.editHistory || []),
+              {
+                timestamp: now,
+                changes: changes.join('、')
+              }
+            ] : existingDiary?.editHistory || []
+          });
+        }
       } else {
         // 創建新日記
         const newDiaryId = await dbService.createDiary({

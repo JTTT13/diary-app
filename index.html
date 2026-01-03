@@ -1,10 +1,23 @@
 <!doctype html>
-<html lang="en">
+<!-- 加入 class="dark" 確保 Tailwind 一載入就用深色樣式，唔好等 JS -->
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <!-- 告訴瀏覽器此頁面支援深色模式，避免瀏覽器原生白色背景 -->
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>diary-app</title>
+    <style>
+      /* 設定初始背景色為 Tailwind gray-900 (#111827) 以配合 App Loading 畫面 */
+      body, html {
+        background-color: #111827 !important; /* 加 !important 對抗 Tailwind Reset */
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

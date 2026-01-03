@@ -120,7 +120,8 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
   // [Vibe] Pagination: 分頁狀態
   const PAGE_SIZE = 20
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const observerTarget = useRef<HTMLDivElement>(null)
+  // Use callback-ref to ensure observer attaches only when element exists
+  const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null)
 
   // [Vibe] Pagination: 搜尋或篩選條件改變時，重置回第一頁
   useEffect(() => {
@@ -129,21 +130,20 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   // [Vibe] Pagination: 監聽底部元素，觸發加載更多
   useEffect(() => {
+    if (!sentinelEl) return
+
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting) {
+        if (entries[0]?.isIntersecting) {
           setVisibleCount(prev => prev + PAGE_SIZE)
         }
       },
       { threshold: 0.5 } // 看到 50% 就加載
     )
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current)
-    }
-
+    observer.observe(sentinelEl)
     return () => observer.disconnect()
-  }, [observerTarget])
+  }, [sentinelEl])
 
   
   const [batchMode, setBatchMode] = useState(false);
@@ -946,7 +946,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
         </div>
       ) : (
         /* [Vibe] 還原貼合佈局，只保留底部 padding 避免被 BottomNav 遮住 */
-        <div className="space-y-2.5 mt-1 pb-24">
+        <div className="space-y-2.5 mt-0 pb-24">
           {/* [Vibe] Pagination: 只渲染可見部分 (Slice) */}
           {filteredDiaries.slice(0, visibleCount).map((diary) => {
             const hasTitle = diary.title && diary.title.trim().length > 0;
@@ -1065,7 +1065,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
       {/* [Vibe] Pagination: 隱形觸發點 (Sentinel) */}
       {filteredDiaries.length > visibleCount && (
-        <div ref={observerTarget} className="h-10 w-full flex justify-center items-center opacity-50">
+        <div ref={setSentinelEl} className="h-10 w-full flex justify-center items-center opacity-50">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-400"></div>
         </div>
       )}
