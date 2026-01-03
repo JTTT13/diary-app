@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { dbService } from '../lib/db';
 
 export function DataManagement() {
@@ -10,19 +13,42 @@ export function DataManagement() {
     setIsExporting(true);
     try {
       const data = await dbService.backupData();
-      const blob = new Blob([data], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `日記備份_${new Date().toISOString().split('T')[0]}.json`;
-      link.click();
+      const fileName = `日記備份_${new Date().toISOString().split('T')[0]}.json`;
+
+      if (Capacitor.isNativePlatform()) {
+        // [Mobile] 寫入暫存並呼叫分享選單
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: data,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        });
+
+        await Share.share({
+          title: '匯出日記備份',
+          text: '這是我的日記備份 JSON 檔',
+          url: result.uri,
+          dialogTitle: '儲存備份檔案',
+        });
+      } else {
+        // [Web] 傳統下載方式
+        const blob = new Blob([data], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+      }
 
       await dbService.updateLastBackup();
       const lastBackupTime = await dbService.getLastBackup();
       setLastBackup(lastBackupTime);
-
-      alert('JSON 匯出成功！');
+      
+      if (!Capacitor.isNativePlatform()) {
+        alert('JSON 匯出成功！');
+      }
     } catch (error) {
-      alert('JSON 匯出失敗，請稍後再試');
+      console.error(error);
+      alert('匯出失敗，請重試');
     } finally {
       setIsExporting(false);
     }

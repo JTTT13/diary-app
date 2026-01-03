@@ -359,6 +359,34 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* 手機/觸控設備：backdrop-filter 成本高，降級成普通半透明背景 */
+@media (pointer: coarse), (max-width: 640px) {
+  .glass-effect {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .dark .glass-effect {
+    background: rgba(17, 24, 39, 0.92); /* approx gray-900 */
+  }
+}
+
+/* 偏好減少動畫：大量 stagger-item 會令長列表更卡 */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item,
+  .nav-enter,
+  .page-transition-enter,
+  .fab-enhanced {
+    animation: none !important;
+  }
+
+  button,
+  * {
+    transition: none !important;
+  }
+}
+
 /* 按鈕脈衝動畫 */
 @keyframes pulse-ring {
   0% {

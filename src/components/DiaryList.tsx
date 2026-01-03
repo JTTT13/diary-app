@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useRef, useCallback, useMemo, useLayoutE
 import { formatHourLabel, getHeatmapColorClass, getHourOrder } from '../lib/heatmap';
 import { dbService, type DiaryEntry } from '../lib/db';
 import { BottomSheet, type BottomSheetOption } from './BottomSheet';
+import { clampVisibleCount, scheduleIdle } from '../lib/listPerf.js';
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
@@ -120,7 +121,10 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
 
   // Vibe Pagination
   const PAGESIZE = 20
-  
+
+  // 冷啟動最大 render 數（避免一次過回復到 100+ 導致手機 WebView 卡頓）
+  const MAX_INITIAL_VISIBLE = 40
+
   // Generate a unique key based on current view state
   const getStorageKey = (prefix: string, filter: string, sort: string, order: string, month: string | null, search: string) => {
     const parts = [prefix, filter, sort, order]
@@ -128,21 +132,53 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     if (search) parts.push(search)
     return parts.join("_")
   }
-  
-  // Initial state must derive from props/state directly is tricky in useState initializer
-  // because we need access to the state variables which aren't initialized yet.
-  // Instead, we initialize with PAGESIZE and use a layout effect to restore immediately.
+
   const [visibleCount, setVisibleCount] = useState(PAGESIZE)
-  // Use callback-ref to ensure observer attaches only when element exists
   const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null)
-  
+
+  // NEW: restore visibleCount 但先 clamp，剩餘用 idle 慢慢補回
+  // 目的：開 app 時唔一次過 render 晒，明顯減少「一開就 lag」。
+  useLayoutEffect(() => {
+    const countKey = getStorageKey("count", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
+    const savedRaw = sessionStorage.getItem(countKey)
+    const saved = savedRaw ? parseInt(savedRaw) : PAGESIZE
+
+    // 先 clamp（冷啟動）
+    // 動態 total 建議用「當前實際可顯示列表長度」去 cap（後面 slice 時亦安全）
+    const initial = clampVisibleCount(saved, { pageSize: PAGESIZE, maxInitial: MAX_INITIAL_VISIBLE })
+
+    setVisibleCount(initial)
+
+    // 如果之前真係睇到好多，之後用 idle 分批補回，避免 blocking
+    if (saved > initial) {
+      let cancelled = false
+      const target = saved
+
+      const bump = () => {
+        if (cancelled) return
+        setVisibleCount(prev => {
+          const next = Math.min(target, prev + PAGESIZE)
+          if (next < target) scheduleIdle(bump)
+          return next
+        })
+      }
+
+      scheduleIdle(bump)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    return
+  }, [filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm])
+
   // [Vibe] Persistence: 儲存 visibleCount 到對應的 key
   useEffect(() => {
     const countKey = getStorageKey("count", filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm)
     sessionStorage.setItem(countKey, visibleCount.toString())
   }, [visibleCount, filterType, sortType, sortOrder, selectedMonth, debouncedSearchTerm])
 
-  // [Vibe] Pagination: 監聽底部元素，觸發加載更多
+  // [Vibe] Pagination: 監聽底部元素，觸發加載更多（要 cap，避免無限加）
   useEffect(() => {
     if (!sentinelEl) return
 
@@ -152,7 +188,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
           setVisibleCount(prev => prev + PAGESIZE)
         }
       },
-      { threshold: 0.5 } // 看到 50% 就加載
+      { threshold: 0.5 }
     )
 
     observer.observe(sentinelEl)
