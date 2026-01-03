@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from 'react';
+import { formatHourLabel, getHeatmapColorClass, getHourOrder } from '../lib/heatmap';
 import { dbService, type DiaryEntry } from '../lib/db';
 import { BottomSheet, type BottomSheetOption } from './BottomSheet';
 
@@ -175,6 +176,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
     return tmp.textContent || tmp.innerText || '';
   }, []);
 
+  const hourOrder = useMemo(() => getHourOrder(6), []);
 
   // 移除舊的 filterAndSortDiaries useEffect
 
@@ -1070,7 +1072,7 @@ export function DiaryList({ onEdit, onNew, refreshTrigger, cachedDiaries, onDiar
                      </svg>
                    </button>
                    )}
-  
+   
                    <div className="flex items-center justify-between gap-3 mb-3">
                      <div className="flex-1 min-w-0">
                        {hasTitle && (
